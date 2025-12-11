@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadSession } from "@/lib/session";
 import type { TaskMeta } from "./types";
 
@@ -53,6 +53,8 @@ export default function HubSchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [currentSlotId, setCurrentSlotId] = useState<string | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [newlyOnline, setNewlyOnline] = useState<Record<string, boolean>>({});
 
   const [activeView, setActiveView] = useState<"schedule" | "myTasks">(
     "schedule"
@@ -79,11 +81,13 @@ export default function HubSchedulePage() {
     if (session?.name) setCurrentUserName(session.name);
   }, []);
 
-  // Load schedule data from Notion-backed API
-  useEffect(() => {
-    async function loadSchedule() {
-      setLoading(true);
+  // Load schedule data from Notion-backed API (with auto-refresh)
+  const loadSchedule = useCallback(
+    async (opts: { showLoading?: boolean } = {}) => {
+      const { showLoading = false } = opts;
+      if (showLoading) setLoading(true);
       setError(null);
+
       try {
         const res = await fetch("/api/schedule");
         if (!res.ok) {
@@ -95,12 +99,75 @@ export default function HubSchedulePage() {
         console.error(e);
         setError("Unable to load schedule. Please refresh.");
       } finally {
-        setLoading(false);
+        if (showLoading) setLoading(false);
       }
-    }
+    },
+    []
+  );
 
-    loadSchedule();
-  }, []);
+  useEffect(() => {
+    loadSchedule({ showLoading: true });
+    const interval = setInterval(() => loadSchedule(), 45_000);
+    return () => clearInterval(interval);
+  }, [loadSchedule]);
+
+  // Preload task status/description for tagging
+  useEffect(() => {
+    if (!data) return;
+
+    const uniqueTasks = new Set<string>();
+    data.cells.forEach((row) => {
+      row.forEach((cell) => {
+        const primary = cell.split("\n")[0].trim();
+        if (primary) uniqueTasks.add(primary);
+      });
+    });
+
+    const missing = Array.from(uniqueTasks).filter(
+      (name) => !taskMetaMap[name]
+    );
+    if (missing.length === 0) return;
+
+    (async () => {
+      const results = await Promise.all(
+        missing.map(async (name) => {
+          try {
+            const res = await fetch(
+              `/api/task?name=${encodeURIComponent(name)}`
+            );
+            if (!res.ok) return null;
+            const json = await res.json();
+            return {
+              key: json.name || name,
+              original: name,
+              status: json.status || "",
+              description: json.description || "",
+            } as const;
+          } catch (err) {
+            console.error("Failed to preload task meta", err);
+            return null;
+          }
+        })
+      );
+
+      setTaskMetaMap((prev) => {
+        const next = { ...prev } as Record<string, TaskMeta>;
+        results.forEach((item) => {
+          if (item) {
+            next[item.key] = {
+              status: item.status,
+              description: item.description,
+            };
+            next[item.original] = {
+              status: item.status,
+              description: item.description,
+            };
+          }
+        });
+        return next;
+      });
+    })();
+  }, [data, taskMetaMap]);
 
   // Preload task status/description for tagging
   useEffect(() => {
@@ -269,8 +336,65 @@ export default function HubSchedulePage() {
     return () => clearInterval(interval);
   }, [data]);
 
-  async function loadTaskDetails(taskName: string) {
-    setModalLoading(true);
+  // Track who is actively "online" based on the current slot assignments
+  useEffect(() => {
+    if (!data || !currentSlotId) {
+      setOnlineUsers([]);
+      return;
+    }
+
+    const slotIdx = data.slots.findIndex((s) => s.id === currentSlotId);
+    if (slotIdx === -1) {
+      setOnlineUsers([]);
+      return;
+    }
+
+    const nextOnline: string[] = [];
+    data.people.forEach((person, rowIdx) => {
+      const task = (data.cells[rowIdx]?.[slotIdx] ?? "").trim();
+      if (!task) return;
+      const firstName = person.split(/\s+/)[0] || person;
+      if (!nextOnline.includes(firstName)) nextOnline.push(firstName);
+    });
+
+    setOnlineUsers((prev) => {
+      const isSameLength = prev.length === nextOnline.length;
+      const isSameOrder = isSameLength && prev.every((name, i) => name === nextOnline[i]);
+      if (isSameOrder) return prev;
+
+      const newly = nextOnline.filter((name) => !prev.includes(name));
+      if (newly.length) {
+        setNewlyOnline((prevMap) => {
+          const filteredEntries = Object.entries(prevMap).filter(([name]) =>
+            nextOnline.includes(name)
+          );
+          const cleaned = Object.fromEntries(filteredEntries) as Record<string, boolean>;
+
+          newly.forEach((name) => {
+            cleaned[name] = true;
+            setTimeout(() => {
+              setNewlyOnline((current) => {
+                const next = { ...current };
+                delete next[name];
+                return next;
+              });
+            }, 1200);
+          });
+
+          return cleaned;
+        });
+      }
+
+      return nextOnline;
+    });
+  }, [data, currentSlotId]);
+
+  async function loadTaskDetails(
+    taskName: string,
+    opts: { quiet?: boolean } = {}
+  ) {
+    const { quiet = false } = opts;
+    if (!quiet) setModalLoading(true);
 
     try {
       const res = await fetch(`/api/task?name=${encodeURIComponent(taskName)}`);
@@ -310,7 +434,7 @@ export default function HubSchedulePage() {
         photos: [],
       });
     } finally {
-      setModalLoading(false);
+      if (!quiet) setModalLoading(false);
     }
   }
 
@@ -393,9 +517,49 @@ export default function HubSchedulePage() {
     setCommentDraft("");
   }
 
+  // Auto-refresh task details while the modal is open
+  useEffect(() => {
+    if (!modalTask) return undefined;
+    const taskName = modalTask.task.split("\n")[0].trim();
+    if (!taskName) return undefined;
+
+    const interval = setInterval(
+      () => loadTaskDetails(taskName, { quiet: true }),
+      15_000
+    );
+    return () => clearInterval(interval);
+  }, [modalTask]);
+
   return (
     <>
       <div className="space-y-8">
+        {onlineUsers.length > 0 && (
+          <section className="rounded-lg border border-[#d0c9a4] bg-white/80 px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2 pb-2">
+              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-inner animate-pulse" />
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5d7f3b]">
+                Online now
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {onlineUsers.map((name) => (
+                <span
+                  key={name}
+                  className={`inline-flex items-center gap-2 rounded-full border border-[#cfd2a1] bg-[#f8f4e3] px-3 py-1 text-sm font-semibold text-[#3e4c24] shadow-sm transition duration-300 ease-out ${
+                    newlyOnline[name] ? "animate-pulse scale-[1.04]" : ""
+                  }`}
+                >
+                  <span className="relative inline-flex h-2.5 w-2.5 items-center justify-center">
+                    <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-emerald-400 opacity-60" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
+                  </span>
+                  {name}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Meal Assignments */}
         <section>
           <h2 className="text-2xl font-semibold tracking-[0.18em] uppercase text-[#5d7f3b] mb-4">
@@ -978,6 +1142,7 @@ function ScheduleGrid({
   const numCols = workSlotIndices.length;
 
   const normalizedUser = currentUserName?.toLowerCase() ?? "";
+  const baseRowHeight = 72;
   const baseIndex = people.findIndex(
     (p) => p.toLowerCase() === normalizedUser
   );
@@ -985,12 +1150,20 @@ function ScheduleGrid({
 
   const similarity = (a: number, b: number) => {
     let score = 0;
+    let streak = 0;
+    let bestStreak = 0;
     workSlotIndices.forEach((slotIdx) => {
       const taskA = (cells[a]?.[slotIdx] ?? "").trim();
       const taskB = (cells[b]?.[slotIdx] ?? "").trim();
-      if (taskA && taskA === taskB) score++;
+      if (taskA && taskA === taskB) {
+        score++;
+        streak++;
+        if (streak > bestStreak) bestStreak = streak;
+      } else {
+        streak = 0;
+      }
     });
-    return score;
+    return score + bestStreak * 0.5;
   };
 
   const remaining = [...originalIndices];
@@ -1031,6 +1204,9 @@ function ScheduleGrid({
   const rowSpan: number[][] = Array.from({ length: numRows }, () =>
     Array(numCols).fill(1)
   );
+  const colSpan: number[][] = Array.from({ length: numRows }, () =>
+    Array(numCols).fill(1)
+  );
   const showCell: boolean[][] = Array.from({ length: numRows }, () =>
     Array(numCols).fill(true)
   );
@@ -1063,6 +1239,56 @@ function ScheduleGrid({
       }
 
       r = end;
+    }
+  }
+
+  // Merge horizontally across consecutive shifts for the same task
+  for (let r = 0; r < numRows; r++) {
+    let c = 0;
+    while (c < numCols) {
+      if (!showCell[r][c]) {
+        c++;
+        continue;
+      }
+
+      const slotIndex = workSlotIndices[c];
+      const baseRow = rowOrder[r];
+      const baseTask = (cells[baseRow]?.[slotIndex] ?? "").trim();
+      if (!baseTask) {
+        c++;
+        continue;
+      }
+
+      const spanDown = rowSpan[r][c];
+      let colSpanCount = 1;
+      let nextCol = c + 1;
+
+      while (nextCol < numCols) {
+        if (!showCell[r][nextCol]) break;
+        if (rowSpan[r][nextCol] !== spanDown) break;
+
+        const nextSlotIndex = workSlotIndices[nextCol];
+        let allMatch = true;
+        for (let offset = 0; offset < spanDown; offset++) {
+          const vr = r + offset;
+          const realRow = rowOrder[vr];
+          const compareBase = (cells[realRow]?.[slotIndex] ?? "").trim();
+          const compareNext = (cells[realRow]?.[nextSlotIndex] ?? "").trim();
+          if (!compareBase || compareBase !== compareNext) {
+            allMatch = false;
+            break;
+          }
+        }
+
+        if (!allMatch) break;
+
+        colSpanCount++;
+        showCell[r][nextCol] = false;
+        nextCol++;
+      }
+
+      colSpan[r][c] = colSpanCount;
+      c += colSpanCount;
     }
   }
 
@@ -1143,14 +1369,18 @@ function ScheduleGrid({
                     <td
                       key={`${visualRow}-${slotIndex}`}
                       rowSpan={rowSpan[visualRow][cIdx]}
-                      className={`border border-[#d1d4aa] px-3 py-2 align-top ${
-                        isCurrentCol ? "bg-[#f0f4de]" : ""
-                      }`}
-                    />
-                  );
-                }
+                      style={{
+                        minHeight: `${rowSpan[visualRow][cIdx] * baseRowHeight}px`,
+                      }}
+                    className={`border border-[#d1d4aa] p-1 align-top h-full ${
+                      isCurrentCol ? "bg-[#f0f4de]" : ""
+                    }`}
+                  />
+                );
+              }
 
                 const span = rowSpan[visualRow][cIdx];
+                const spanHeight = span * baseRowHeight;
 
                 // Collect all people in this merged box
                 const groupNames: string[] = [];
@@ -1168,7 +1398,9 @@ function ScheduleGrid({
                   <td
                     key={`${visualRow}-${slotIndex}`}
                     rowSpan={span}
-                    className={`border border-[#d1d4aa] px-2 py-2 align-top ${
+                    colSpan={colSpan[visualRow][cIdx]}
+                    style={{ minHeight: `${spanHeight}px` }}
+                    className={`border border-[#d1d4aa] p-1 align-top h-full ${
                       isCurrentCol ? "bg-[#f0f4de]" : ""
                     }`}
                   >
@@ -1182,7 +1414,8 @@ function ScheduleGrid({
                           groupNames,
                         })
                       }
-                      className="w-full text-left rounded-md bg-[#e3e6bf] border border-[#cfd2a1] px-2 py-2 text-[11px] leading-snug text-[#3f4630] shadow-sm hover:bg-[#dde1b7] focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
+                      style={{ minHeight: `${spanHeight}px` }}
+                      className="flex h-full min-h-full w-full flex-col justify-between gap-2 text-left rounded-md bg-[#e3e6bf] border border-[#cfd2a1] p-2 text-[11px] leading-snug text-[#3f4630] shadow-sm hover:bg-[#dde1b7] focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
                     >
                       <div className="flex justify-between items-start gap-2">
                         <span className="font-semibold">
