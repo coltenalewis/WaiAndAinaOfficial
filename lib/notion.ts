@@ -28,6 +28,23 @@ export async function queryDatabase(databaseId: string, body: any = {}) {
   return res.json();
 }
 
+export async function retrieveDatabase(databaseId: string) {
+  const res = await fetch(`${NOTION_BASE_URL}/databases/${databaseId}`, {
+    headers: {
+      Authorization: `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version": NOTION_VERSION,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Notion retrieve database error:", res.status, text);
+    throw new Error(`Failed to retrieve Notion database: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export async function updatePage(pageId: string, properties: any) {
   const res = await fetch(`${NOTION_BASE_URL}/pages/${pageId}`, {
     method: "PATCH",

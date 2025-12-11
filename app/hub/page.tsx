@@ -1310,7 +1310,7 @@ function ScheduleGrid({
                     <td
                       key={`${visualRow}-${slotIndex}`}
                       rowSpan={rowSpan[visualRow][cIdx]}
-                      className={`border border-[#d1d4aa] px-3 py-2 align-top ${
+                    className={`border border-[#d1d4aa] px-3 py-2 align-top h-full ${
                         isCurrentCol ? "bg-[#f0f4de]" : ""
                       }`}
                     />
@@ -1336,7 +1336,7 @@ function ScheduleGrid({
                     key={`${visualRow}-${slotIndex}`}
                     rowSpan={span}
                     colSpan={colSpan[visualRow][cIdx]}
-                    className={`border border-[#d1d4aa] px-2 py-2 align-top ${
+                    className={`border border-[#d1d4aa] px-2 py-2 align-top h-full ${
                       isCurrentCol ? "bg-[#f0f4de]" : ""
                     }`}
                   >
@@ -1350,7 +1350,7 @@ function ScheduleGrid({
                           groupNames,
                         })
                       }
-                      className="w-full text-left rounded-md bg-[#e3e6bf] border border-[#cfd2a1] px-2 py-2 text-[11px] leading-snug text-[#3f4630] shadow-sm hover:bg-[#dde1b7] focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
+                      className="flex h-full w-full flex-col justify-between gap-2 text-left rounded-md bg-[#e3e6bf] border border-[#cfd2a1] px-2 py-2 text-[11px] leading-snug text-[#3f4630] shadow-sm hover:bg-[#dde1b7] focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
                     >
                       <div className="flex justify-between items-start gap-2">
                         <span className="font-semibold">
