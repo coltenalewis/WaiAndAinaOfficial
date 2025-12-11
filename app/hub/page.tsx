@@ -73,7 +73,6 @@ export default function HubSchedulePage() {
 
   const statusOptions = [
     "Not Started",
-    "Incomplete",
     "In Progress",
     "Completed",
   ];
@@ -349,8 +348,9 @@ export default function HubSchedulePage() {
     setCommentSubmitting(true);
 
     try {
-      const authorPrefix = currentUserName ? `${currentUserName}: ` : "";
-      const comment = `${authorPrefix}${commentDraft.trim()}`;
+      const comment = currentUserName
+        ? `${currentUserName} : ${commentDraft.trim()}`
+        : commentDraft.trim();
       const res = await fetch("/api/task", {
         method: "POST",
         headers: {
@@ -400,6 +400,15 @@ export default function HubSchedulePage() {
     });
   }
 
+  function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function handlePhotoSelection(fileList: FileList | null) {
     if (!fileList) return;
     const files = Array.from(fileList).slice(0, 5);
@@ -419,15 +428,12 @@ export default function HubSchedulePage() {
     setPhotoSubmitting(true);
 
     try {
-      const photosPayload: { name: string; url: string }[] = [];
-      for (const draft of photoDrafts) {
-        const arrayBuffer = await draft.file.arrayBuffer();
-        const base64 = btoa(
-          String.fromCharCode(...new Uint8Array(arrayBuffer))
-        );
-        const dataUrl = `data:${draft.file.type};base64,${base64}`;
-        photosPayload.push({ name: draft.file.name, url: dataUrl });
-      }
+      const photosPayload: { name: string; url: string }[] = await Promise.all(
+        photoDrafts.map(async (draft) => ({
+          name: draft.file.name,
+          url: await fileToDataUrl(draft.file),
+        }))
+      );
 
       await fetch("/api/task", {
         method: "PATCH",
@@ -561,20 +567,11 @@ export default function HubSchedulePage() {
                 workSlots.length > 0 &&
                 activeView === "schedule" && (
                   <>
-                    <div className="hidden md:block overflow-x-auto">
+                    <div className="overflow-x-auto">
                       <ScheduleGrid
                         data={data}
                         workSlots={workSlots}
                         currentUserName={currentUserName}
-                        currentSlotId={currentSlotId}
-                        onTaskClick={handleTaskClick}
-                        statusMap={taskMetaMap}
-                      />
-                    </div>
-                    <div className="md:hidden">
-                      <ScheduleGridMobile
-                        data={data}
-                        workSlots={workSlots}
                         currentSlotId={currentSlotId}
                         onTaskClick={handleTaskClick}
                         statusMap={taskMetaMap}
@@ -615,7 +612,7 @@ export default function HubSchedulePage() {
           onClick={closeModal}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-[#f8f4e3] border border-[#d0c9a4] px-6 py-5 shadow-2xl transform transition-all duration-200 ease-out scale-100 opacity-100"
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-[#f8f4e3] border border-[#d0c9a4] px-6 py-5 shadow-2xl transform transition-all duration-200 ease-out scale-100 opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 mb-4">
@@ -1113,24 +1110,43 @@ function ScheduleGrid({
   );
   const originalIndices = people.map((_, idx) => idx);
 
-  let rowOrder: number[];
-  if (baseIndex === -1) {
-    rowOrder = originalIndices;
-  } else {
-    const others = originalIndices.filter((i) => i !== baseIndex);
-    const scored = others.map((i) => {
-      let score = 0;
-      workSlotIndices.forEach((slotIdx) => {
-        const baseTask = (cells[baseIndex]?.[slotIdx] ?? "").trim();
-        const otherTask = (cells[i]?.[slotIdx] ?? "").trim();
-        if (baseTask && baseTask === otherTask) score++;
-      });
-      return { i, score };
+  const similarity = (a: number, b: number) => {
+    let score = 0;
+    workSlotIndices.forEach((slotIdx) => {
+      const taskA = (cells[a]?.[slotIdx] ?? "").trim();
+      const taskB = (cells[b]?.[slotIdx] ?? "").trim();
+      if (taskA && taskA === taskB) score++;
     });
-    scored.sort((a, b) =>
-      b.score !== a.score ? b.score - a.score : a.i - b.i
-    );
-    rowOrder = [baseIndex, ...scored.map((s) => s.i)];
+    return score;
+  };
+
+  const remaining = [...originalIndices];
+  const rowOrder: number[] = [];
+
+  if (baseIndex !== -1) {
+    const basePos = remaining.indexOf(baseIndex);
+    if (basePos !== -1) remaining.splice(basePos, 1);
+    rowOrder.push(baseIndex);
+  } else if (remaining.length) {
+    rowOrder.push(remaining.shift()!);
+  }
+
+  while (remaining.length) {
+    let bestIdx = 0;
+    let bestScore = -1;
+
+    remaining.forEach((idx, i) => {
+      const score = rowOrder.reduce(
+        (max, existing) => Math.max(max, similarity(existing, idx)),
+        -1
+      );
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    });
+
+    rowOrder.push(remaining.splice(bestIdx, 1)[0]);
   }
 
   const orderedPeople = rowOrder.map((i) => people[i]);
@@ -1175,7 +1191,7 @@ function ScheduleGrid({
   }
 
   return (
-    <table className="w-full border-collapse text-xs">
+    <table className="w-full min-w-[720px] border-collapse text-xs">
       <thead>
         <tr className="bg-[#e5e7c5]">
           <th className="border border-[#d1d4aa] px-3 py-2 text-left w-40 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5d7f3b]">

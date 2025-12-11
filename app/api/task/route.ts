@@ -107,12 +107,21 @@ export async function GET(req: Request) {
         : [];
 
     const commentsRaw = await retrieveComments(page.id);
-    const comments = (commentsRaw.results || []).map((c: any) => ({
-      id: c.id,
-      text: getPlainText(c.rich_text) || "",
-      createdTime: c.created_time,
-      author: c.created_by?.name || "Unknown",
-    }));
+    const comments = (commentsRaw.results || []).map((c: any) => {
+      const rawText = getPlainText(c.rich_text) || "";
+      const colonIndex = rawText.indexOf(":");
+      const parsedAuthor =
+        colonIndex > -1 ? rawText.slice(0, colonIndex).trim() : "";
+      const parsedMessage =
+        colonIndex > -1 ? rawText.slice(colonIndex + 1).trim() : rawText;
+
+      return {
+        id: c.id,
+        text: parsedMessage,
+        createdTime: c.created_time,
+        author: parsedAuthor || c.created_by?.name || "Unknown",
+      };
+    });
 
     return NextResponse.json({
       id: page.id,
