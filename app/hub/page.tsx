@@ -677,7 +677,10 @@ export default function HubSchedulePage() {
       return;
     }
 
-    await loadTaskDetails(primaryTitle);
+    const primaryTitle = (payload.task || "").split("\n")[0].trim();
+if (!primaryTitle) return;
+
+await loadTaskDetails(primaryTitle);
   }
 
   function closeModal() {
