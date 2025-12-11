@@ -8,6 +8,23 @@ if (!NOTION_TOKEN) {
 
 const NOTION_BASE_URL = "https://api.notion.com/v1";
 
+export async function retrievePage(pageId: string) {
+  const res = await fetch(`${NOTION_BASE_URL}/pages/${pageId}`, {
+    headers: {
+      Authorization: `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version": NOTION_VERSION,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Notion retrieve page error:", res.status, text);
+    throw new Error(`Failed to retrieve Notion page: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export async function queryDatabase(databaseId: string, body: any = {}) {
   const res = await fetch(`${NOTION_BASE_URL}/databases/${databaseId}/query`, {
     method: "POST",
@@ -23,6 +40,29 @@ export async function queryDatabase(databaseId: string, body: any = {}) {
     const text = await res.text();
     console.error("Notion error:", res.status, text);
     throw new Error(`Failed to query Notion: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function createPageInDatabase(
+  databaseId: string,
+  properties: any
+) {
+  const res = await fetch(`${NOTION_BASE_URL}/pages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version": NOTION_VERSION,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ parent: { database_id: databaseId }, properties }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Notion create page error:", res.status, text);
+    throw new Error(`Failed to create Notion page: ${res.status}`);
   }
 
   return res.json();
