@@ -180,6 +180,70 @@ export default function HubSchedulePage() {
     [data]
   );
 
+  const eveningSlots = useMemo(
+    () =>
+      workSlots.filter(
+        (slot) => /evening/i.test(slot.label) && !/weekend/i.test(slot.label)
+      ),
+    [workSlots]
+  );
+
+  const weekendSlots = useMemo(
+    () => workSlots.filter((slot) => /weekend/i.test(slot.label)),
+    [workSlots]
+  );
+
+  type CombinedCell = {
+    slot: Slot;
+    names: string[];
+    tasks: { task: string; people: string[] }[];
+  };
+
+  const combineSlotAssignments = useCallback(
+    (targetSlots: Slot[]): CombinedCell[] => {
+      if (!data) return [];
+
+      return targetSlots.map((slot) => {
+        const slotIdx = data.slots.findIndex((s) => s.id === slot.id);
+        if (slotIdx === -1) {
+          return { slot, names: [], tasks: [] };
+        }
+
+        const nameSet = new Set<string>();
+        const taskMap: Record<string, string[]> = {};
+
+        data.people.forEach((person, rowIdx) => {
+          const task = (data.cells[rowIdx]?.[slotIdx] ?? "").trim();
+          if (!task) return;
+
+          nameSet.add(person);
+          if (!taskMap[task]) taskMap[task] = [];
+          taskMap[task].push(person);
+        });
+
+        return {
+          slot,
+          names: Array.from(nameSet),
+          tasks: Object.entries(taskMap).map(([task, people]) => ({
+            task,
+            people,
+          })),
+        };
+      });
+    },
+    [data]
+  );
+
+  const eveningCombined = useMemo(
+    () => combineSlotAssignments(eveningSlots),
+    [combineSlotAssignments, eveningSlots]
+  );
+
+  const weekendCombined = useMemo(
+    () => combineSlotAssignments(weekendSlots),
+    [combineSlotAssignments, weekendSlots]
+  );
+
   const myTasks = useMemo(() => {
     if (!data || !currentUserName) return [] as {
       slot: Slot;
@@ -652,6 +716,174 @@ export default function HubSchedulePage() {
             </div>
           </div>
         </section>
+
+        {!loading &&
+          !error &&
+          data &&
+          eveningCombined.length > 0 && (
+            <section className="space-y-3">
+              <h3 className="text-xl font-semibold tracking-[0.16em] uppercase text-[#5d7f3b]">
+                Evening Schedule
+              </h3>
+              <p className="text-sm text-[#7a7f54]">
+                Evening shifts in one glance — everyone assigned to each block and the tasks they share.
+              </p>
+              <div className="rounded-lg bg-[#a0b764] px-3 py-3">
+                <div className="rounded-md bg-[#f8f4e3] overflow-x-auto">
+                  <table className="min-w-full table-auto border-collapse">
+                    <thead>
+                      <tr>
+                        {eveningCombined.map((cell) => (
+                          <th
+                            key={cell.slot.id}
+                            className="border border-[#e2d7b5] px-3 py-2 text-left text-xs uppercase tracking-[0.12em] text-[#6f7a40]"
+                          >
+                            <div className="flex flex-col gap-1">
+                              <span className="font-semibold text-[#42502d]">{cell.slot.label}</span>
+                              {cell.slot.timeRange && (
+                                <span className="text-[11px] text-[#8a8256]">{cell.slot.timeRange}</span>
+                              )}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {eveningCombined.map((cell) => (
+                          <td
+                            key={cell.slot.id}
+                            className="align-top border border-[#e2d7b5] px-3 py-3"
+                          >
+                            <div className="space-y-2">
+                              <p className="text-xs text-[#5d7f3b] font-semibold">
+                                Assigned: {cell.names.length ? cell.names.join(", ") : "No one yet"}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {cell.tasks.length === 0 && (
+                                  <span className="text-xs italic text-[#7a7f54]">No tasks listed</span>
+                                )}
+                                {cell.tasks.map((task) => {
+                                  const participants =
+                                    task.people.length > 0 ? task.people : cell.names;
+                                  const primaryPerson = participants[0] || "Team";
+
+                                  return (
+                                    <button
+                                      key={`${cell.slot.id}-${task.task}`}
+                                      type="button"
+                                      onClick={() =>
+                                        handleTaskClick({
+                                          person: primaryPerson,
+                                          slot: cell.slot,
+                                          task: task.task,
+                                          groupNames: participants,
+                                        })
+                                      }
+                                      className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-left shadow-sm hover:shadow transition text-xs text-[#3f3c2d]"
+                                    >
+                                      <div className="font-semibold text-[#42502d]">{task.task}</div>
+                                      <div className="text-[11px] text-[#7a7f54]">
+                                        {participants.length ? participants.join(", ") : "No names yet"}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+        {!loading &&
+          !error &&
+          data &&
+          weekendCombined.length > 0 && (
+            <section className="space-y-3">
+              <h3 className="text-xl font-semibold tracking-[0.16em] uppercase text-[#5d7f3b]">
+                Weekend Schedule
+              </h3>
+              <p className="text-sm text-[#7a7f54]">
+                Weekend-specific shifts grouped so you can quickly see who is involved and what they are tackling.
+              </p>
+              <div className="rounded-lg bg-[#a0b764] px-3 py-3">
+                <div className="rounded-md bg-[#f8f4e3] overflow-x-auto">
+                  <table className="min-w-full table-auto border-collapse">
+                    <thead>
+                      <tr>
+                        {weekendCombined.map((cell) => (
+                          <th
+                            key={cell.slot.id}
+                            className="border border-[#e2d7b5] px-3 py-2 text-left text-xs uppercase tracking-[0.12em] text-[#6f7a40]"
+                          >
+                            <div className="flex flex-col gap-1">
+                              <span className="font-semibold text-[#42502d]">{cell.slot.label}</span>
+                              {cell.slot.timeRange && (
+                                <span className="text-[11px] text-[#8a8256]">{cell.slot.timeRange}</span>
+                              )}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {weekendCombined.map((cell) => (
+                          <td
+                            key={cell.slot.id}
+                            className="align-top border border-[#e2d7b5] px-3 py-3"
+                          >
+                            <div className="space-y-2">
+                              <p className="text-xs text-[#5d7f3b] font-semibold">
+                                Assigned: {cell.names.length ? cell.names.join(", ") : "No one yet"}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {cell.tasks.length === 0 && (
+                                  <span className="text-xs italic text-[#7a7f54]">No tasks listed</span>
+                                )}
+                                {cell.tasks.map((task) => {
+                                  const participants =
+                                    task.people.length > 0 ? task.people : cell.names;
+                                  const primaryPerson = participants[0] || "Team";
+
+                                  return (
+                                    <button
+                                      key={`${cell.slot.id}-${task.task}`}
+                                      type="button"
+                                      onClick={() =>
+                                        handleTaskClick({
+                                          person: primaryPerson,
+                                          slot: cell.slot,
+                                          task: task.task,
+                                          groupNames: participants,
+                                        })
+                                      }
+                                      className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-left shadow-sm hover:shadow transition text-xs text-[#3f3c2d]"
+                                    >
+                                      <div className="font-semibold text-[#42502d]">{task.task}</div>
+                                      <div className="text-[11px] text-[#7a7f54]">
+                                        {participants.length ? participants.join(", ") : "No names yet"}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
       </div>
 
       {/* Task detail modal */}

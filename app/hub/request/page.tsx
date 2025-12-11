@@ -178,13 +178,16 @@ export default function HubRequestPage() {
     if (!activeRequest || !sessionName || !commentText.trim()) return;
     setCommentBusy(true);
     try {
+      const formatted = sessionName
+        ? `${sessionName} : ${commentText.trim()}`
+        : commentText.trim();
       const res = await fetch("/api/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "comment",
           id: activeRequest.id,
-          comment: commentText.trim(),
+          comment: formatted,
           user: sessionName,
         }),
       });
@@ -541,7 +544,6 @@ export default function HubRequestPage() {
               <section className="rounded-lg border border-[#d5d7bc] bg-[#f7f5ec] p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#556036]">Comments</h3>
-                  <span className="text-[11px] uppercase tracking-[0.14em] text-[#7a7f54]">Live discussion</span>
                 </div>
 
                 <div className="space-y-3 max-h-48 overflow-y-auto pr-1">

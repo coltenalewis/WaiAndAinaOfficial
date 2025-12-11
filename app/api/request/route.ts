@@ -148,11 +148,10 @@ export async function POST(req: Request) {
     }
 
     try {
-      const formatted = `${user} : ${comment}`;
       await createComment(id, [
         {
           type: "text",
-          text: { content: formatted },
+          text: { content: comment },
         },
       ]);
 

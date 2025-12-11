@@ -53,9 +53,19 @@ export default function HubLayout({ children }: { children: ReactNode }) {
       <header className="w-full bg-[#a0b764] text-[#f9f9ec] shadow-md relative">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center sm:justify-between">
           {/* Top row on mobile: logo + toggles */}
-          <div className="flex items-center justify-between gap-3">
-            {/* Left: logo + title */}
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3 w-full">
+            <div className="flex items-center gap-2 sm:hidden">
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="rounded-md border border-[#e5eacc]/60 bg-[#f4f7de]/90 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#56652f] hover:bg-white transition-colors shadow-sm"
+                aria-label="Open navigation"
+              >
+                ☰
+              </button>
+            </div>
+
+            {/* Center: logo + title */}
+            <div className="flex items-center gap-3 flex-1 sm:flex-none sm:justify-center">
               <div className="h-9 w-9 rounded-full bg-[#f1e4b5] flex items-center justify-center shadow-sm">
                 <span className="text-xl">🐐</span>
               </div>
@@ -70,13 +80,6 @@ export default function HubLayout({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2 sm:hidden">
-              <button
-                onClick={() => setMobileMenuOpen(true)}
-                className="rounded-md border border-[#e5eacc]/60 bg-[#f4f7de]/90 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#56652f] hover:bg-white transition-colors shadow-sm"
-                aria-label="Open navigation"
-              >
-                ☰
-              </button>
               <button
                 onClick={handleLogout}
                 className="rounded-md border border-[#e5eacc]/60 bg-[#f4f7de]/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#56652f] hover:bg-white transition-colors"
@@ -200,7 +203,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
             </div>
 
             <div className="relative h-full">
-              <div className="flex flex-col gap-1 px-3 py-4 text-[#485926]">
+              <div className="flex flex-col gap-1 px-3 py-4 text-[#485926] overflow-y-auto max-h-[calc(100vh-140px)]">
                 <MobileLink href="/hub" active={pathname === "/hub"}>
                   Schedule
                 </MobileLink>
@@ -229,32 +232,32 @@ export default function HubLayout({ children }: { children: ReactNode }) {
                     ▶
                   </span>
                 </button>
-              </div>
 
-              <div
-                className={`absolute top-16 left-full w-56 bg-white border border-[#e7dfc0] rounded-xl shadow-lg transition-all duration-200 origin-left ${
-                  mobileGuidesOpen
-                    ? "opacity-100 translate-x-0"
-                    : "opacity-0 translate-x-3 pointer-events-none"
-                }`}
-              >
-                <div className="flex flex-col divide-y divide-[#f0ead4]">
-                  {guideLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className={`flex items-center gap-2 px-4 py-3 text-[13px] transition-colors ${
-                        pathname === link.href
-                          ? "bg-[#e5efc8] text-[#3b4224]"
-                          : "hover:bg-[#f8f4e3] text-[#485926]"
-                      }`}
-                    >
-                      <span>{link.icon}</span>
-                      <span className="font-semibold tracking-[0.12em] uppercase">
-                        {link.label}
-                      </span>
-                    </Link>
-                  ))}
+                <div
+                  className={`overflow-hidden transition-all duration-200 ${
+                    mobileGuidesOpen ? "max-h-64 opacity-100" : "max-h-0 opacity-0"
+                  }`}
+                >
+                  <div className="mt-2 ml-2 rounded-lg border border-[#e7dfc0] bg-white shadow-inner max-h-56 overflow-y-auto">
+                    <div className="flex flex-col divide-y divide-[#f0ead4]">
+                      {guideLinks.map((link) => (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className={`flex items-center gap-2 px-4 py-3 text-[13px] transition-colors ${
+                            pathname === link.href
+                              ? "bg-[#e5efc8] text-[#3b4224]"
+                              : "hover:bg-[#f8f4e3] text-[#485926]"
+                          }`}
+                        >
+                          <span>{link.icon}</span>
+                          <span className="font-semibold tracking-[0.12em] uppercase">
+                            {link.label}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
