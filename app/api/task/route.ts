@@ -61,7 +61,6 @@ function getPlainText(prop: any): string {
   }
 }
 
-
 async function findTaskPageByName(name: string) {
   const normalized = name.trim();
   if (!normalized) return null;
@@ -166,11 +165,11 @@ export async function PATCH(req: Request) {
   }
 
   const body = await req.json().catch(() => null);
-  const { name, status, photos } = body || {};
+  const { name, status } = body || {};
 
-  if (!name || (!status && !photos)) {
+  if (!name || !status) {
     return NextResponse.json(
-      { error: "Missing task name, status, or photos" },
+      { error: "Missing task name or status" },
       { status: 400 }
     );
   }
@@ -184,26 +183,13 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const properties: Record<string, any> = {};
-
-    if (status) {
-      properties[TASK_STATUS_PROPERTY_KEY] = { select: { name: status } };
-    }
-
-    if (photos && Array.isArray(photos)) {
-      properties[TASK_PHOTOS_PROPERTY_KEY] = {
-        files: photos
-          .filter((p: any) => p?.url)
-          .map((p: any, idx: number) => ({
-            name: p.name || `Photo ${idx + 1}`,
-            external: { url: p.url },
-          })),
-      };
-    }
+    const properties: Record<string, any> = {
+      [TASK_STATUS_PROPERTY_KEY]: { select: { name: status } },
+    };
 
     await updatePage(page.id, properties);
 
-    return NextResponse.json({ success: true, status, photos });
+    return NextResponse.json({ success: true, status });
   } catch (err) {
     console.error("Failed to update task status:", err);
     return NextResponse.json(

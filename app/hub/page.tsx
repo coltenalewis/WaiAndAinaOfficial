@@ -66,10 +66,6 @@ export default function HubSchedulePage() {
   const [modalLoading, setModalLoading] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
-  const [photoDrafts, setPhotoDrafts] = useState<
-    { file: File; preview: string }[]
-  >([]);
-  const [photoSubmitting, setPhotoSubmitting] = useState(false);
 
   const statusOptions = [
     "Not Started",
@@ -370,94 +366,11 @@ export default function HubSchedulePage() {
     }
   }
 
-  async function compressImage(file: File): Promise<File> {
-    const img = document.createElement("img");
-    img.src = URL.createObjectURL(file);
-
-    await new Promise((resolve, reject) => {
-      img.onload = () => resolve(null);
-      img.onerror = reject;
-    });
-
-    const maxDim = 1200;
-    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(img.width * scale));
-    canvas.height = Math.max(1, Math.round(img.height * scale));
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    const blob: Blob | null = await new Promise((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.75)
-    );
-
-    if (!blob) return file;
-    return new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
-      type: "image/jpeg",
-      lastModified: Date.now(),
-    });
-  }
-
-  function fileToDataUrl(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function handlePhotoSelection(fileList: FileList | null) {
-    if (!fileList) return;
-    const files = Array.from(fileList).slice(0, 5);
-
-    const compressed: { file: File; preview: string }[] = [];
-    for (const file of files) {
-      const safeFile = await compressImage(file);
-      const preview = URL.createObjectURL(safeFile);
-      compressed.push({ file: safeFile, preview });
-    }
-
-    setPhotoDrafts(compressed);
-  }
-
-  async function submitPhotos(taskName: string) {
-    if (!photoDrafts.length) return;
-    setPhotoSubmitting(true);
-
-    try {
-      const photosPayload: { name: string; url: string }[] = await Promise.all(
-        photoDrafts.map(async (draft) => ({
-          name: draft.file.name,
-          url: await fileToDataUrl(draft.file),
-        }))
-      );
-
-      await fetch("/api/task", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: taskName, photos: photosPayload }),
-      });
-
-      setPhotoDrafts([]);
-      await loadTaskDetails(taskName);
-    } catch (err) {
-      console.error("Failed to upload photos", err);
-    } finally {
-      setPhotoSubmitting(false);
-    }
-  }
-
   // When a task box is clicked
   async function handleTaskClick(payload: TaskClickPayload) {
     setModalTask(payload);
     setModalDetails(null);
     setCommentDraft("");
-    setPhotoDrafts([]);
 
     const primaryTitle = payload.task.split("\n")[0].trim();
     if (!primaryTitle) {
@@ -478,7 +391,6 @@ export default function HubSchedulePage() {
     setModalTask(null);
     setModalDetails(null);
     setCommentDraft("");
-    setPhotoDrafts([]);
   }
 
   return (
@@ -764,7 +676,7 @@ export default function HubSchedulePage() {
                       Task Photos
                     </p>
                     <p className="text-[11px] text-[#6a6748]">
-                      Upload or review photos for this task.
+                      Existing photos for this task.
                     </p>
                   </div>
                 </div>
@@ -798,45 +710,6 @@ export default function HubSchedulePage() {
                       No photos uploaded for this task yet.
                     </p>
                   )}
-                </div>
-                <div className="space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => handlePhotoSelection(e.target.files)}
-                    className="w-full text-[12px] text-[#4f4b33]"
-                  />
-                  {photoDrafts.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {photoDrafts.map((draft) => (
-                        <div
-                          key={draft.preview}
-                          className="w-20 overflow-hidden rounded-md border border-[#d0c9a4] bg-[#f9f7e8]"
-                        >
-                          <div className="aspect-square w-full overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={draft.preview}
-                              alt={draft.file.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                          <p className="truncate px-2 py-1 text-[10px] text-[#5b593c]">
-                            {draft.file.name}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    disabled={!photoDrafts.length || photoSubmitting}
-                    onClick={() => submitPhotos(modalDetails?.name || modalTask.task)}
-                    className="w-full rounded-md bg-[#5d7f3b] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white shadow-md hover:bg-[#526d34] disabled:opacity-60"
-                  >
-                    {photoSubmitting ? "Uploading…" : "Upload Photos"}
-                  </button>
                 </div>
               </div>
 
@@ -1136,10 +1009,13 @@ function ScheduleGrid({
     let bestScore = -1;
 
     remaining.forEach((idx, i) => {
-      const score = rowOrder.reduce(
-        (max, existing) => Math.max(max, similarity(existing, idx)),
-        -1
+      const sharedWithPlaced = rowOrder.reduce(
+        (sum, existing) => sum + similarity(existing, idx),
+        0
       );
+      const userBoost = baseIndex !== -1 ? similarity(baseIndex, idx) : 0;
+      const score = sharedWithPlaced + userBoost;
+
       if (score > bestScore) {
         bestScore = score;
         bestIdx = i;
