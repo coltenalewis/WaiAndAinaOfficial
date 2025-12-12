@@ -806,6 +806,7 @@ export default function HubSchedulePage() {
                             currentSlotId={currentSlotId}
                             onTaskClick={handleTaskClick}
                             statusMap={taskMetaMap}
+                            statusColors={statusColorLookup}
                           />
                         </div>
                       </div>
@@ -821,6 +822,7 @@ export default function HubSchedulePage() {
                         tasks={myTasks}
                         onTaskClick={handleTaskClick}
                         statusMap={taskMetaMap}
+                        statusColors={statusColorLookup}
                         currentUserName={currentUserName}
                       />
                     </div>
@@ -1499,11 +1501,13 @@ function MyTasksList({
   tasks,
   onTaskClick,
   statusMap = {},
+  statusColors = {},
   currentUserName,
 }: {
   tasks: { slot: Slot; task: string; groupNames: string[] }[];
   onTaskClick?: (payload: TaskClickPayload) => void;
   statusMap?: Record<string, TaskMeta>;
+  statusColors?: Record<string, string>;
   currentUserName?: string | null;
 }) {
   if (tasks.length === 0) {
@@ -1552,7 +1556,7 @@ function MyTasksList({
               </div>
               <StatusBadge
                 status={status}
-                color={statusColorLookup[status || ""]}
+                color={statusColors[status || ""]}
               />
             </div>
             {task.includes("\n") && (
@@ -1590,6 +1594,7 @@ function ScheduleGrid({
   currentSlotId,
   onTaskClick,
   statusMap = {},
+  statusColors = {},
 }: {
   data: ScheduleResponse;
   workSlots: Slot[];
@@ -1597,6 +1602,7 @@ function ScheduleGrid({
   currentSlotId: string | null;
   onTaskClick?: (payload: TaskClickPayload) => void;
   statusMap?: Record<string, TaskMeta>;
+  statusColors?: Record<string, string>;
 }) {
   const { people, slots, cells } = data;
 
@@ -1911,7 +1917,7 @@ function ScheduleGrid({
                             <div className="mt-1">
                               <StatusBadge
                                 status={meta?.status}
-                                color={statusColorLookup[meta?.status || ""]}
+                                color={statusColors[meta?.status || ""]}
                               />
                             </div>
                             {note && (
