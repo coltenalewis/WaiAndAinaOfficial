@@ -12,6 +12,8 @@ export default function HubLayout({ children }: { children: ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopGuidesOpen, setDesktopGuidesOpen] = useState(false);
   const [mobileGuidesOpen, setMobileGuidesOpen] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [newlyOnline, setNewlyOnline] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const session = loadSession();
@@ -46,6 +48,105 @@ export default function HubLayout({ children }: { children: ReactNode }) {
     setDesktopGuidesOpen(false);
     setMobileGuidesOpen(false);
   }, [pathname]);
+
+  // Heartbeat to keep users marked online across all hub pages
+  useEffect(() => {
+    if (!name) return undefined;
+
+    let cancelled = false;
+
+    const ping = async (offline = false) => {
+      try {
+        await fetch("/api/heartbeat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, offline }),
+        });
+      } catch (err) {
+        if (!cancelled) console.error("Heartbeat failed:", err);
+      }
+    };
+
+    ping();
+    const interval = setInterval(() => ping(false), 15_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+
+      if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+        try {
+          const blob = new Blob([
+            JSON.stringify({ name, offline: true }),
+          ], { type: "application/json" });
+          navigator.sendBeacon("/api/heartbeat", blob);
+        } catch (err) {
+          console.error("Failed to send final heartbeat:", err);
+        }
+      } else {
+        ping(true);
+      }
+    };
+  }, [name]);
+
+  // Poll online roster using heartbeat timestamps
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOnline = async () => {
+      try {
+        const res = await fetch("/api/online");
+        if (!res.ok) return;
+        const json = await res.json();
+        const baseNames = ((json.onlineUsers as string[]) || [])
+          .map((n) => (n || "").split(/\s+/)[0] || n)
+          .filter(Boolean);
+        const nextOnline = Array.from(new Set(baseNames));
+
+        setOnlineUsers((prev) => {
+          const isSameLength = prev.length === (nextOnline?.length || 0);
+          const isSameOrder =
+            isSameLength && nextOnline?.every((n: string, i: number) => n === prev[i]);
+          if (isSameOrder && nextOnline) return prev;
+
+          const newly = (nextOnline || []).filter((n) => !prev.includes(n));
+          if (newly.length) {
+            setNewlyOnline((prevMap) => {
+              const filteredEntries = Object.entries(prevMap).filter(([key]) =>
+                (nextOnline || []).includes(key)
+              );
+              const cleaned = Object.fromEntries(filteredEntries) as Record<string, boolean>;
+
+              newly.forEach((n) => {
+                cleaned[n] = true;
+                setTimeout(() => {
+                  setNewlyOnline((current) => {
+                    const next = { ...current };
+                    delete next[n];
+                    return next;
+                  });
+                }, 1200);
+              });
+
+              return cleaned;
+            });
+          }
+
+          return nextOnline || [];
+        });
+      } catch (err) {
+        if (!cancelled) console.error("Failed to load online users:", err);
+      }
+    };
+
+    loadOnline();
+    const interval = setInterval(loadOnline, 20_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <main className="min-h-screen flex flex-col bg-[#f8f4e3] text-[#3b4224]">
@@ -99,7 +200,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
                 Request
               </HubLink>
               <HubLink href="/hub/goat" active={pathname === "/hub/goat"}>
-                Goat Run
+                🐐
               </HubLink>
               <HubLink href="/hub/settings" active={pathname === "/hub/settings"}>
                 Settings
@@ -211,7 +312,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
                   Request
                 </MobileLink>
                 <MobileLink href="/hub/goat" active={pathname === "/hub/goat"}>
-                  Goat Run
+                  🐐
                 </MobileLink>
                 <MobileLink href="/hub/settings" active={pathname === "/hub/settings"}>
                   Settings
@@ -264,6 +365,33 @@ export default function HubLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+
+      {onlineUsers.length > 0 && (
+        <div className="bg-[#eef2d9]/70 border-b border-[#d7d0ad]">
+          <div className="max-w-6xl mx-auto px-3 sm:px-4 py-1.5 flex items-center gap-2 overflow-x-auto no-scrollbar text-[#405124]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#f7f4e6] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] border border-[#d0c9a4] shadow-sm">
+              <span className="relative inline-flex h-2 w-2 items-center justify-center">
+                <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-600" />
+              </span>
+              Online
+            </span>
+            <div className="flex items-center gap-2 text-xs">
+              {onlineUsers.map((person) => (
+                <span
+                  key={person}
+                  className={`inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 border border-[#d6d9b9] shadow-sm transition ${
+                    newlyOnline[person] ? "ring-2 ring-emerald-200" : ""
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-inner" />
+                  <span className="font-semibold text-[#3f4a28]">{person}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Page body */}
       <section className="flex-1">

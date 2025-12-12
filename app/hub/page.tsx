@@ -92,8 +92,6 @@ export default function HubSchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [currentSlotId, setCurrentSlotId] = useState<string | null>(null);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
-  const [newlyOnline, setNewlyOnline] = useState<Record<string, boolean>>({});
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [activeView, setActiveView] = useState<"schedule" | "myTasks">(
@@ -480,104 +478,6 @@ export default function HubSchedulePage() {
     return () => clearInterval(interval);
   }, [data]);
 
-  // Heartbeat to keep users marked online
-  useEffect(() => {
-    if (!currentUserName) return undefined;
-
-    let cancelled = false;
-
-    const ping = async () => {
-      try {
-        await fetch("/api/heartbeat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: currentUserName }),
-        });
-      } catch (err) {
-        if (!cancelled) console.error("Heartbeat failed:", err);
-      }
-    };
-
-    ping();
-    const interval = setInterval(ping, 15_000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-
-      if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-        try {
-          const blob = new Blob(
-            [JSON.stringify({ name: currentUserName, offline: true })],
-            { type: "application/json" }
-          );
-          navigator.sendBeacon("/api/heartbeat", blob);
-        } catch (err) {
-          console.error("Failed to send final heartbeat:", err);
-        }
-      }
-    };
-  }, [currentUserName]);
-
-  // Poll online roster using heartbeat timestamps
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadOnline = async () => {
-      try {
-        const res = await fetch("/api/online");
-        if (!res.ok) return;
-        const json = await res.json();
-        const baseNames = ((json.onlineUsers as string[]) || [])
-          .map((name) => (name || "").split(/\s+/)[0] || name)
-          .filter(Boolean);
-        const nextOnline = Array.from(new Set(baseNames));
-
-        setOnlineUsers((prev) => {
-          const isSameLength = prev.length === (nextOnline?.length || 0);
-          const isSameOrder =
-            isSameLength && nextOnline?.every((name: string, i: number) => name === prev[i]);
-          if (isSameOrder && nextOnline) return prev;
-
-          const newly = (nextOnline || []).filter((name) => !prev.includes(name));
-          if (newly.length) {
-            setNewlyOnline((prevMap) => {
-              const filteredEntries = Object.entries(prevMap).filter(([name]) =>
-                (nextOnline || []).includes(name)
-              );
-              const cleaned = Object.fromEntries(filteredEntries) as Record<string, boolean>;
-
-              newly.forEach((name) => {
-                cleaned[name] = true;
-                setTimeout(() => {
-                  setNewlyOnline((current) => {
-                    const next = { ...current };
-                    delete next[name];
-                    return next;
-                  });
-                }, 1200);
-              });
-
-              return cleaned;
-            });
-          }
-
-          return nextOnline || [];
-        });
-      } catch (err) {
-        if (!cancelled) console.error("Failed to load online users:", err);
-      }
-    };
-
-    loadOnline();
-    const interval = setInterval(loadOnline, 20_000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
   async function loadTaskDetails(
     taskName: string,
     opts: { quiet?: boolean } = {}
@@ -740,33 +640,6 @@ export default function HubSchedulePage() {
   return (
     <>
       <div className="space-y-8">
-        {onlineUsers.length > 0 && (
-          <section className="rounded-lg border border-[#d0c9a4] bg-white/80 px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2 pb-2">
-              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-inner animate-pulse" />
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5d7f3b]">
-                Online now
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {onlineUsers.map((name) => (
-                <span
-                  key={name}
-                  className={`inline-flex items-center gap-2 rounded-full border border-[#cfd2a1] bg-[#f8f4e3] px-3 py-1 text-sm font-semibold text-[#3e4c24] shadow-sm transition duration-300 ease-out ${
-                    newlyOnline[name] ? "animate-pulse scale-[1.04]" : ""
-                  }`}
-                >
-                  <span className="relative inline-flex h-2.5 w-2.5 items-center justify-center">
-                    <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-emerald-400 opacity-60" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
-                  </span>
-                  {name}
-                </span>
-              ))}
-            </div>
-          </section>
-        )}
-
         {taskTypes.length > 0 && (
           <section className="rounded-lg border border-[#d0c9a4] bg-white/80 px-4 py-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
