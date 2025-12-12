@@ -777,86 +777,9 @@ export default function HubSchedulePage() {
     await loadTaskDetails(baseTitle);
   }
 
-  async function updateTaskStatus(newStatus: string, taskName: string) {
-    if (!isOnline) return;
-
-    setModalDetails((prev) =>
-      prev ? { ...prev, status: newStatus } : prev
-    );
-    setTaskMetaMap((prev) => ({
-      ...prev,
-      [taskName]: {
-        status: newStatus,
-        description: prev[taskName]?.description || "",
-        typeName: prev[taskName]?.typeName,
-        typeColor: prev[taskName]?.typeColor,
-      },
-    }));
-
-    try {
-      await fetch("/api/task", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: taskName, status: newStatus }),
-      });
-    } catch (e) {
-      console.error("Failed to update task status:", e);
-    }
-  }
-
-  async function submitTaskComment(taskName: string) {
-    if (!commentDraft.trim()) return;
-    if (!isOnline) return;
-    setCommentSubmitting(true);
-
-    try {
-      const comment = currentUserName
-        ? `${currentUserName} : ${commentDraft.trim()}`
-        : commentDraft.trim();
-      const res = await fetch("/api/task", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: taskName, comment }),
-      });
-
-      if (res.ok) {
-        setCommentDraft("");
-        await loadTaskDetails(taskName);
-      }
-    } catch (e) {
-      console.error("Failed to add comment:", e);
-    } finally {
-      setCommentSubmitting(false);
-    }
-  }
 
   // When a task box is clicked
-  async function handleTaskClick(taskPayload: TaskClickPayload) {
-    setModalTask(taskPayload);
-    setModalDetails(null);
-    setCommentDraft("");
 
-    const baseTitle = taskBaseName(taskPayload.task || "");
-    if (!baseTitle) {
-      setModalDetails({
-        name: taskPayload.task,
-        description: "",
-        status: "",
-        comments: [],
-        media: [],
-        links: [],
-        taskType: { name: "", color: "default" },
-        estimatedTime: "",
-      });
-      return;
-    }
-
-    await loadTaskDetails(baseTitle);
-  }
 
   function closeModal() {
     setModalTask(null);
