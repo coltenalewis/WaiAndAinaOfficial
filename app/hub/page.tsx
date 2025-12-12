@@ -55,6 +55,62 @@ type TaskDetails = {
 type TaskTypeOption = { name: string; color: string };
 type StatusOption = { name: string; color: string };
 
+const SCHEDULE_CACHE_KEY = "hub-schedule-cache";
+const TASK_CACHE_KEY = "hub-task-cache";
+
+function readCachedSchedule(): ScheduleResponse | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(SCHEDULE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.data ?? parsed;
+  } catch (err) {
+    console.error("Failed to read cached schedule", err);
+    return null;
+  }
+}
+
+function writeCachedSchedule(data: ScheduleResponse) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(
+      SCHEDULE_CACHE_KEY,
+      JSON.stringify({ cachedAt: Date.now(), data })
+    );
+  } catch (err) {
+    console.error("Failed to cache schedule", err);
+  }
+}
+
+function readCachedTask(taskName: string): TaskDetails | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(TASK_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, TaskDetails & { cachedAt?: number }>;
+    return parsed?.[taskName] ?? null;
+  } catch (err) {
+    console.error("Failed to read cached task", err);
+    return null;
+  }
+}
+
+function writeCachedTask(taskName: string, details: TaskDetails) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(TASK_CACHE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, TaskDetails & { cachedAt?: number }>) : {};
+    const next = { ...parsed, [taskName]: { ...details, cachedAt: Date.now() } };
+    // Keep cache from growing unbounded
+    const entries = Object.entries(next).sort(([, a], [, b]) => (b.cachedAt || 0) - (a.cachedAt || 0));
+    const trimmed = Object.fromEntries(entries.slice(0, 50));
+    localStorage.setItem(TASK_CACHE_KEY, JSON.stringify(trimmed));
+  } catch (err) {
+    console.error("Failed to cache task", err);
+  }
+}
+
 function splitCellTasks(cell: string): string[] {
   if (!cell.trim()) return [];
 
@@ -96,6 +152,7 @@ export default function HubSchedulePage() {
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [currentUserType, setCurrentUserType] = useState<string | null>(null);
   const [currentSlotId, setCurrentSlotId] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(true);
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [activeView, setActiveView] = useState<"schedule" | "myTasks">(
@@ -131,6 +188,29 @@ export default function HubSchedulePage() {
     if (session?.userType) setCurrentUserType(session.userType);
   }, []);
 
+  // Track online/offline status so we can present cached data in read-only mode
+  useEffect(() => {
+    if (typeof navigator !== "undefined") {
+      setIsOnline(navigator.onLine);
+    }
+
+    function handleOnline() {
+      setIsOnline(true);
+    }
+
+    function handleOffline() {
+      setIsOnline(false);
+    }
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -162,12 +242,26 @@ export default function HubSchedulePage() {
     })();
   }, []);
 
-  // Load schedule data from Notion-backed API (with auto-refresh)
+  // Load schedule data from Notion-backed API (with auto-refresh + offline cache)
   const loadSchedule = useCallback(
     async (opts: { showLoading?: boolean } = {}) => {
       const { showLoading = false } = opts;
       if (showLoading) setLoading(true);
       setError(null);
+
+      const cached = readCachedSchedule();
+
+      if (!isOnline) {
+        if (cached) {
+          setData(cached);
+          setError("Offline mode: showing your last saved schedule.");
+        } else {
+          setData(null);
+          setError("Offline mode: no saved schedule is available yet.");
+        }
+        if (showLoading) setLoading(false);
+        return;
+      }
 
       try {
         const res = await fetch("/api/schedule");
@@ -177,14 +271,20 @@ export default function HubSchedulePage() {
         const json = await res.json();
         setData(json);
         setError(json.message || null);
+        writeCachedSchedule(json);
       } catch (e) {
         console.error(e);
-        setError("Unable to load schedule. Please refresh.");
+        if (cached) {
+          setData(cached);
+          setError("Showing saved schedule until you reconnect.");
+        } else {
+          setError("Unable to load schedule. Please refresh when online.");
+        }
       } finally {
         if (showLoading) setLoading(false);
       }
     },
-    []
+    [isOnline]
   );
 
   useEffect(() => {
@@ -507,24 +607,52 @@ export default function HubSchedulePage() {
     const { quiet = false } = opts;
     if (!quiet) setModalLoading(true);
 
+    const applyDetails = (detail: TaskDetails) => {
+      setModalDetails(detail);
+      const metaPayload = {
+        status: detail.status || "",
+        description: detail.description || "",
+        typeName: detail.taskType?.name,
+        typeColor: detail.taskType?.color,
+      };
+      setTaskMetaMap((prev) => ({
+        ...prev,
+        [detail.name || taskName]: metaPayload,
+        [taskName]: metaPayload,
+      }));
+    };
+
+    const emptyDetails: TaskDetails = {
+      name: taskName,
+      description: "",
+      status: "",
+      comments: [],
+      media: [],
+      links: [],
+      taskType: { name: "", color: "default" },
+      estimatedTime: "",
+    };
+
+    const cached = readCachedTask(taskName);
+    if (!isOnline) {
+      if (cached) {
+        applyDetails(cached);
+      } else {
+        setModalDetails(emptyDetails);
+      }
+      if (!quiet) setModalLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/task?name=${encodeURIComponent(taskName)}`);
       if (!res.ok) {
-        setModalDetails({
-          name: taskName,
-          description: "",
-          status: "",
-          comments: [],
-          media: [],
-          links: [],
-          taskType: { name: "", color: "default" },
-          estimatedTime: "",
-        });
+        applyDetails(emptyDetails);
         return;
       }
 
       const json = await res.json();
-      setModalDetails({
+      const detail: TaskDetails = {
         name: json.name || taskName,
         description: json.description || "",
         status: json.status || "",
@@ -533,36 +661,24 @@ export default function HubSchedulePage() {
         links: json.links || [],
         taskType: json.taskType || { name: "", color: "default" },
         estimatedTime: json.estimatedTime || "",
-      });
-      const metaPayload = {
-        status: json.status || "",
-        description: json.description || "",
-        typeName: json.taskType?.name,
-        typeColor: json.taskType?.color,
       };
-      setTaskMetaMap((prev) => ({
-        ...prev,
-        [json.name || taskName]: metaPayload,
-        [taskName]: metaPayload,
-      }));
+      applyDetails(detail);
+      writeCachedTask(taskName, detail);
     } catch (e) {
       console.error("Failed to load task details:", e);
-      setModalDetails({
-        name: taskName,
-        description: "",
-        status: "",
-        comments: [],
-        media: [],
-        links: [],
-        taskType: { name: "", color: "default" },
-        estimatedTime: "",
-      });
+      if (cached) {
+        applyDetails(cached);
+      } else {
+        setModalDetails(emptyDetails);
+      }
     } finally {
       if (!quiet) setModalLoading(false);
     }
   }
 
   async function updateTaskStatus(newStatus: string, taskName: string) {
+    if (!isOnline) return;
+
     setModalDetails((prev) =>
       prev ? { ...prev, status: newStatus } : prev
     );
@@ -591,6 +707,7 @@ export default function HubSchedulePage() {
 
   async function submitTaskComment(taskName: string) {
     if (!commentDraft.trim()) return;
+    if (!isOnline) return;
     setCommentSubmitting(true);
 
     try {
@@ -674,6 +791,13 @@ export default function HubSchedulePage() {
               : "No schedule date is configured in Notion yet."}
           </p>
         </div>
+
+        {!isOnline && (
+          <div className="rounded-lg border border-[#e4dcb8] bg-[#f8f5e6] px-4 py-3 shadow-sm text-sm text-[#6a6748]">
+            You&apos;re offline. Showing your most recently saved schedule and task
+            details. Updates and comments are disabled until you reconnect.
+          </div>
+        )}
 
         {!isExternalVolunteer && taskTypes.length > 0 && (
           <section className="rounded-lg border border-[#d0c9a4] bg-white/80 px-4 py-3 shadow-sm">
@@ -1233,13 +1357,16 @@ export default function HubSchedulePage() {
                     onChange={(e) => setCommentDraft(e.target.value)}
                     placeholder="Add a comment"
                     className="flex-1 rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3f3c2d] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
+                    disabled={!isOnline}
                   />
                   <button
                     type="button"
                     onClick={() =>
                       submitTaskComment(modalDetails?.name || modalTask.task)
                     }
-                    disabled={commentSubmitting || !commentDraft.trim()}
+                    disabled={
+                      !isOnline || commentSubmitting || !commentDraft.trim()
+                    }
                     className="w-full sm:w-auto rounded-md bg-[#a0b764] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f9f9ec] shadow-md hover:bg-[#95ad5e] disabled:opacity-60"
                   >
                     {commentSubmitting ? "Posting…" : "Post"}
@@ -1349,7 +1476,7 @@ export default function HubSchedulePage() {
                     )
                   }
                   className="w-full rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3f3c2d] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
-                  disabled={!modalDetails || modalLoading}
+                  disabled={!modalDetails || modalLoading || !isOnline}
                 >
                   <option value="" disabled>
                     Select a status
