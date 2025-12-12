@@ -53,6 +53,13 @@ function getPlainText(prop: any): string {
         .join(", ")
         .trim();
     default:
+      // Optional: final fallback if we get raw { rich_text: [...] } without type
+      if (Array.isArray(prop.rich_text)) {
+        return prop.rich_text
+          .map((t: any) => t.plain_text || "")
+          .join("")
+          .trim();
+      }
       return "";
   }
 }
@@ -190,9 +197,96 @@ export async function GET(req: Request) {
       comments,
     });
   } catch (err) {
-    console.error("Failed to fetch task details from Notion:", err);
+    console.error("Failed to add comment:", err);
     return NextResponse.json(
-      { error: "Failed to fetch task details" },
+      { error: "Failed to add comment" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: Request) {
+  if (!TASKS_DB_ID) {
+    return NextResponse.json(
+      { error: "NOTION_TASKS_DATABASE_ID is not set" },
+      { status: 500 }
+    );
+  }
+
+  const body = await req.json().catch(() => null);
+  const { name, status } = body || {};
+
+  if (!name || !status) {
+    return NextResponse.json(
+      { error: "Missing task name or status" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const page = await findTaskPageByName(name);
+    if (!page) {
+      return NextResponse.json(
+        { error: "Task not found" },
+        { status: 404 }
+      );
+    }
+
+    const properties: Record<string, any> = {
+      [TASK_STATUS_PROPERTY_KEY]: { select: { name: status } },
+    };
+
+    await updatePage(page.id, properties);
+
+    return NextResponse.json({ success: true, status });
+  } catch (err) {
+    console.error("Failed to update task status:", err);
+    return NextResponse.json(
+      { error: "Failed to update status" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: Request) {
+  if (!TASKS_DB_ID) {
+    return NextResponse.json(
+      { error: "NOTION_TASKS_DATABASE_ID is not set" },
+      { status: 500 }
+    );
+  }
+
+  const body = await req.json().catch(() => null);
+  const { name, comment } = body || {};
+
+  if (!name || !comment) {
+    return NextResponse.json(
+      { error: "Missing task name or comment" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const page = await findTaskPageByName(name);
+    if (!page) {
+      return NextResponse.json(
+        { error: "Task not found" },
+        { status: 404 }
+      );
+    }
+
+    await createComment(page.id, [
+      {
+        type: "text",
+        text: { content: comment },
+      },
+    ]);
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Failed to add comment:", err);
+    return NextResponse.json(
+      { error: "Failed to add comment" },
       { status: 500 }
     );
   }
