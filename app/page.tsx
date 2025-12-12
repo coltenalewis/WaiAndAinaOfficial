@@ -221,7 +221,7 @@ export default function HomePage() {
               Sustainable Living, Ag Education, Conservation
             </h1>
             <p className="text-[#606740] text-sm leading-relaxed">
-              We welcome you to Wai &amp; Aina. Discover our farm life, conservation projects, and daily work hub—all in one place.
+              We welcome you to Wai &amp; Aina. Discover our farm life, conservation projects, and daily work hub-all in one place.
             </p>
             <div className="flex flex-wrap gap-3 pt-2">
               {heroButton("Explore the Farm", "#about", true)}
