@@ -242,10 +242,18 @@ export async function GET() {
     };
     return NextResponse.json(response);
   } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to fetch schedule";
     console.error("Failed to fetch schedule from Notion:", err);
+
+    const friendly = "No schedule has been assigned yet.";
     return NextResponse.json(
-      { error: "Failed to fetch schedule from Notion" },
-      { status: 500 }
+      {
+        people: [],
+        slots: [],
+        cells: [],
+        message: friendly,
+      },
+      { status: 200 }
     );
   }
 }

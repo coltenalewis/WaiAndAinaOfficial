@@ -5,11 +5,29 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearSession, loadSession } from "@/lib/session";
 
+function notionColorToClasses(color?: string | null) {
+  const map: Record<string, string> = {
+    default: "bg-slate-100 text-slate-800 border-slate-200",
+    gray: "bg-slate-100 text-slate-800 border-slate-200",
+    brown: "bg-amber-100 text-amber-900 border-amber-200",
+    orange: "bg-orange-100 text-orange-900 border-orange-200",
+    yellow: "bg-amber-100 text-amber-900 border-amber-200",
+    green: "bg-emerald-100 text-emerald-900 border-emerald-200",
+    blue: "bg-sky-100 text-sky-900 border-sky-200",
+    purple: "bg-violet-100 text-violet-900 border-violet-200",
+    pink: "bg-pink-100 text-pink-900 border-pink-200",
+    red: "bg-rose-100 text-rose-900 border-rose-200",
+  };
+
+  return map[color || "default"] || map.default;
+}
+
 export default function HubLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [name, setName] = useState<string>("");
   const [userType, setUserType] = useState<string | null>(null);
+  const [userTypeColor, setUserTypeColor] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopGuidesOpen, setDesktopGuidesOpen] = useState(false);
   const [mobileGuidesOpen, setMobileGuidesOpen] = useState(false);
@@ -26,6 +44,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
     }
     setName(session.name);
     setUserType(session.userType ?? null);
+    setUserTypeColor(session.userTypeColor ?? null);
   }, [router]);
 
   function isActive(path: string) {
@@ -323,9 +342,20 @@ export default function HubLayout({ children }: { children: ReactNode }) {
           {/* Right: user + logout (desktop / tablet) */}
           <div className="hidden sm:flex items-center gap-3">
             {name && (
-              <span className="text-[11px] uppercase tracking-[0.16em]">
-                Logged in as <span className="font-semibold">{name}</span>
-              </span>
+              <div className="flex flex-col items-end gap-1 text-right">
+                <span className="text-[11px] uppercase tracking-[0.16em]">
+                  Logged in as <span className="font-semibold">{name}</span>
+                </span>
+                {userType && (
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-[2px] text-[10px] font-semibold uppercase tracking-[0.14em] ${notionColorToClasses(
+                      userTypeColor
+                    )}`}
+                  >
+                    {userType}
+                  </span>
+                )}
+              </div>
             )}
             <button
               onClick={handleLogout}
@@ -337,8 +367,19 @@ export default function HubLayout({ children }: { children: ReactNode }) {
 
           {/* Logged in label on very small screens (optional) */}
           {name && (
-            <div className="sm:hidden text-[10px] uppercase tracking-[0.16em] text-[#f5f7eb]/90">
-              Logged in as <span className="font-semibold">{name}</span>
+            <div className="sm:hidden text-[10px] uppercase tracking-[0.16em] text-[#f5f7eb]/90 flex flex-col gap-1">
+              <span>
+                Logged in as <span className="font-semibold">{name}</span>
+              </span>
+              {userType && (
+                <span
+                  className={`inline-flex items-center gap-1 self-start rounded-full border px-2 py-[2px] text-[9px] font-semibold tracking-[0.14em] text-[#2f2f21] ${notionColorToClasses(
+                    userTypeColor
+                  )}`}
+                >
+                  {userType}
+                </span>
+              )}
             </div>
           )}
         </div>

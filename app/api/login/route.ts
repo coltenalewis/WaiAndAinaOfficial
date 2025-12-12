@@ -70,6 +70,7 @@ export async function POST(req: Request) {
 
     let matchFound = false;
     let matchedUserType: string | null = null;
+    let matchedUserTypeColor: string | null = null;
 
     for (const page of pages) {
       const props = page.properties || {};
@@ -82,6 +83,7 @@ export async function POST(req: Request) {
       ) {
         const rawType = props[USER_TYPE_PROPERTY_KEY];
         matchedUserType = rawType ? getPlainText(rawType) : null;
+        matchedUserTypeColor = rawType?.select?.color || null;
         matchFound = true;
         break;
       }
@@ -94,7 +96,12 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true, name, userType: matchedUserType });
+    return NextResponse.json({
+      ok: true,
+      name,
+      userType: matchedUserType,
+      userTypeColor: matchedUserTypeColor,
+    });
   } catch (err) {
     console.error("Login check failed:", err);
     return NextResponse.json(

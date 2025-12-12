@@ -101,6 +101,7 @@ export default function HomePage() {
       const nextSession: UserSession = {
         name: selectedName,
         userType: data.userType || null,
+        userTypeColor: data.userTypeColor || null,
       };
       saveSession(nextSession);
       setSession(formatSession(nextSession));

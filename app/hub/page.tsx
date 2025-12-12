@@ -16,6 +16,7 @@ type ScheduleResponse = {
   slots: Slot[];
   cells: string[][];
   scheduleDate?: string;
+  message?: string;
 };
 
 type MealAssignment = {
@@ -52,6 +53,7 @@ type TaskDetails = {
 };
 
 type TaskTypeOption = { name: string; color: string };
+type StatusOption = { name: string; color: string };
 
 function splitCellTasks(cell: string): string[] {
   if (!cell.trim()) return [];
@@ -102,6 +104,7 @@ export default function HubSchedulePage() {
 
   const [taskMetaMap, setTaskMetaMap] = useState<Record<string, TaskMeta>>({});
   const [taskTypes, setTaskTypes] = useState<TaskTypeOption[]>([]);
+  const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
   
   // Modal state
   const [modalTask, setModalTask] = useState<TaskClickPayload | null>(null);
@@ -110,11 +113,13 @@ export default function HubSchedulePage() {
   const [commentDraft, setCommentDraft] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
-  const statusOptions = [
-    "Not Started",
-    "In Progress",
-    "Completed",
-  ];
+  const statusColorLookup = useMemo(() => {
+    const map: Record<string, string> = {};
+    statusOptions.forEach((opt) => {
+      map[opt.name] = opt.color;
+    });
+    return map;
+  }, [statusOptions]);
 
   const isExternalVolunteer =
     (currentUserType || "").toLowerCase() === "external volunteer";
@@ -134,8 +139,11 @@ export default function HubSchedulePage() {
         const json = await res.json();
         if (Array.isArray(json.types)) {
           setTaskTypes(json.types as TaskTypeOption[]);
-          return;
         }
+        if (Array.isArray(json.statuses)) {
+          setStatusOptions(json.statuses as StatusOption[]);
+        }
+        if (Array.isArray(json.types) || Array.isArray(json.statuses)) return;
       } catch (err) {
         console.error("Failed to load task types", err);
       }
@@ -145,6 +153,11 @@ export default function HubSchedulePage() {
         { name: "Animal Care", color: "green" },
         { name: "Field Work", color: "orange" },
         { name: "Maintenance", color: "blue" },
+      ]);
+      setStatusOptions([
+        { name: "Not Started", color: "gray" },
+        { name: "In Progress", color: "blue" },
+        { name: "Completed", color: "green" },
       ]);
     })();
   }, []);
@@ -163,6 +176,7 @@ export default function HubSchedulePage() {
         }
         const json = await res.json();
         setData(json);
+        setError(json.message || null);
       } catch (e) {
         console.error(e);
         setError("Unable to load schedule. Please refresh.");
@@ -1319,7 +1333,10 @@ export default function HubSchedulePage() {
                       Update Task Status
                     </p>
                   </div>
-                  <StatusBadge status={modalDetails?.status} />
+                  <StatusBadge
+                    status={modalDetails?.status}
+                    color={statusColorLookup[modalDetails?.status || ""]}
+                  />
                 </div>
                 <select
                   value={modalDetails?.status || ""}
@@ -1336,8 +1353,8 @@ export default function HubSchedulePage() {
                     Select a status
                   </option>
                   {statusOptions.map((option, idx) => (
-                    <option key={option} value={option}>
-                      {idx + 1}. {option}
+                    <option key={option.name} value={option.name}>
+                      {idx + 1}. {option.name}
                     </option>
                   ))}
                 </select>
@@ -1443,18 +1460,10 @@ function getMealIcon(label: string): string {
   return "🍽️";
 }
 
-function StatusBadge({ status }: { status?: string }) {
+function StatusBadge({ status, color }: { status?: string; color?: string }) {
   if (!status) return null;
 
-  const colorMap: Record<string, string> = {
-    "Not Started": "bg-gray-200 text-gray-800 border-gray-300",
-    Incomplete: "bg-amber-100 text-amber-800 border-amber-200",
-    "In Progress": "bg-blue-100 text-blue-800 border-blue-200",
-    Completed: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  };
-
-  const badgeClass =
-    colorMap[status] || "bg-slate-100 text-slate-800 border-slate-200";
+  const badgeClass = typeColorClasses(color);
 
   return (
     <span
@@ -1541,7 +1550,10 @@ function MyTasksList({
                   </p>
                 )}
               </div>
-              <StatusBadge status={status} />
+              <StatusBadge
+                status={status}
+                color={statusColorLookup[status || ""]}
+              />
             </div>
             {task.includes("\n") && (
               <p className="mt-1 whitespace-pre-line text-[11px] text-[#5b593c]">
@@ -1897,7 +1909,10 @@ function ScheduleGrid({
                               )}
                             </div>
                             <div className="mt-1">
-                              <StatusBadge status={meta?.status} />
+                              <StatusBadge
+                                status={meta?.status}
+                                color={statusColorLookup[meta?.status || ""]}
+                              />
                             </div>
                             {note && (
                               <div className="mt-1 whitespace-pre-line opacity-90">

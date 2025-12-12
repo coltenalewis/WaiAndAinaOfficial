@@ -5,6 +5,7 @@ export const SESSION_KEY = "waianda_session";
 export type UserSession = {
   name: string;
   userType?: string | null;
+  userTypeColor?: string | null;
 };
 
 export function saveSession(session: UserSession) {
