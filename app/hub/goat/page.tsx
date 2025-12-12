@@ -474,7 +474,7 @@ export default function GoatArcadePage() {
 
     const bet = Math.max(1, Math.floor(diceBetAmount));
     if (bet > stats.goats) {
-      setDiceResult({ error: "Not enough goats for that bet." });
+      setDiceResult({ error: "Not enough 🐐 for that bet." });
       return;
     }
 
@@ -549,13 +549,13 @@ export default function GoatArcadePage() {
           <div>
             <h1 className="text-2xl font-semibold text-[#3b4224]">Goat Arcade</h1>
             <p className="text-sm text-[#556133]">
-              Hop fences for glory or roll the dice for goats. 200 Run points = 1 goat for Goat Dice.
+              Hop fences for glory or roll the dice for extra 🐐. Every 200 Run points adds one 🐐 to Goat Dice.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap text-xs text-[#4f5d2a]">
           <span className="px-3 py-1 rounded-full bg-white/80 shadow-inner font-semibold">
-            Goats: {loadingStats ? "..." : stats.goats}
+            Balance: 🐐 {loadingStats ? "..." : stats.goats}
           </span>
           <span className="px-3 py-1 rounded-full bg-white/80 shadow-inner font-semibold">
             Best Run: {loadingStats ? "..." : stats.bestRun}
@@ -641,10 +641,9 @@ export default function GoatArcadePage() {
                           {runSummary && (
                             <div className="mt-3 text-sm text-[#3f4a23]">
                               <p>
-                                You scored <strong>{runSummary.score}</strong> and earned {runSummary.earned} goat
-                                {runSummary.earned === 1 ? "" : "s"}. Best: {runSummary.bestRun}.
+                                You scored <strong>{runSummary.score}</strong> and gathered 🐐{runSummary.earned}. Best: {runSummary.bestRun}.
                               </p>
-                              <p className="text-xs text-[#6b744d] mt-1">Every 200 points adds 1 goat to Goat Dice.</p>
+                              <p className="text-xs text-[#6b744d] mt-1">Every 200 points adds one 🐐 to Goat Dice.</p>
                             </div>
                           )}
                         </div>
@@ -658,14 +657,14 @@ export default function GoatArcadePage() {
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl bg-white shadow-lg p-4 sm:p-5 flex flex-col gap-4">
+              <div className="rounded-2xl bg-white shadow-lg p-4 sm:p-5 flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-[#3b4224]">Goat Dice</h2>
-                  <p className="text-sm text-[#556133]">Bet goats on LOW (2-6), SEVEN, or HIGH (8-12). SEVEN pays 5×; others pay 2×.</p>
+                  <p className="text-sm text-[#556133]">Bet your 🐐 on LOW (2–6), SEVEN, or HIGH (8–12). SEVEN pays five 🐐 for every one you wager; the others double you up.</p>
                 </div>
                 <div className="px-3 py-1 rounded-full bg-[#f2f6e6] text-xs font-semibold text-[#4f5d2a] shadow-inner">
-                  Balance: {stats.goats} goats
+                  Balance: 🐐 {stats.goats}
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
@@ -678,7 +677,7 @@ export default function GoatArcadePage() {
                     onChange={(e) => setDiceBetAmount(Number(e.target.value))}
                     className="rounded-lg border border-[#d9e5c2] px-3 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-[#a2c867]"
                   />
-                  <div className="text-xs text-[#6b744d]">Bet is deducted on roll. Winnings are added immediately.</div>
+                  <div className="text-xs text-[#6b744d]">Bet is deducted on roll. Winnings are added immediately to your 🐐 pile.</div>
                 </div>
                 <div className="flex flex-col gap-3">
                   <label className="text-sm font-semibold text-[#3f4a23]">Pick your fate</label>
@@ -729,7 +728,7 @@ export default function GoatArcadePage() {
                     <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
                       <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Bet</span>
                       <span className="text-base font-semibold">
-                        {diceResult.betAmount ?? (diceLoading ? "..." : "--")} goats
+                        🐐 {diceResult.betAmount ?? (diceLoading ? "..." : "--")}
                       </span>
                     </div>
                     <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
@@ -738,8 +737,8 @@ export default function GoatArcadePage() {
                         {diceResult.win === undefined
                           ? "--"
                           : diceResult.win
-                          ? `+${diceResult.payout}`
-                          : `-${diceResult.betAmount ?? 0}`}
+                          ? `+🐐${diceResult.payout}`
+                          : `-🐐${diceResult.betAmount ?? 0}`}
                       </span>
                     </div>
                   </div>
@@ -747,13 +746,19 @@ export default function GoatArcadePage() {
               </div>
 
               <div className="rounded-xl border border-[#d9e5c2] bg-[#f4f8ea] p-4 shadow-inner text-sm text-[#3f4a23]">
-                <div className="font-semibold text-[#2f3618] mb-2">How to play Goat Dice</div>
-                <ul className="space-y-1 text-[#4f5d2a] list-disc list-inside">
-                  <li>Enter a bet amount (deducted when you roll) and choose LOW (2–6), SEVEN, or HIGH (8–12).</li>
-                  <li>Two dice roll together. LOW/HIGH pay 2× your bet; SEVEN pays 5×.</li>
-                  <li>If you win, the payout is added to your goats immediately. If you lose, the bet is gone.</li>
-                  <li>Keep an eye on your balance and have fun—this is a friendly farm casino!</li>
-                </ul>
+                <div className="font-semibold text-[#2f3618] mb-3">How to play Goat Dice</div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {["Place a bet and pick LOW (2–6), SEVEN, or HIGH (8–12).", "Two dice roll together. LOW/HIGH pay 2×; SEVEN pays 5×.", "Winnings pop right back into your 🐐 balance when you win.", "Treat it like a cozy farm game and enjoy the rolls!"]
+                    .map((tip, idx) => (
+                      <div
+                        key={tip}
+                        className="flex items-start gap-2 rounded-lg bg-white/80 border border-[#e3ebd2] p-3 shadow-sm"
+                      >
+                        <span className="text-xl" aria-hidden>🐐</span>
+                        <span className="leading-snug">{tip}</span>
+                      </div>
+                    ))}
+                </div>
               </div>
             </div>
           )}
@@ -765,21 +770,21 @@ export default function GoatArcadePage() {
             <p className="text-xs text-[#6b744d]">Top Goat Dice balances and Goat Run highs.</p>
           </div>
           <div className="grid grid-cols-1 gap-4">
-            <div className="rounded-xl border border-[#d9e5c2] bg-[#f9fbf2] p-3 shadow-inner">
-              <div className="flex items-center justify-between text-sm font-semibold text-[#3f4a23] mb-2">
-                <span>Goat Dice</span>
-                <span>Goats</span>
-              </div>
-              <div className="divide-y divide-[#e3ebd2]">
-                {stats.goatLeaderboard.map((entry, idx) => (
-                  <div key={entry.name} className="flex items-center justify-between py-2 text-sm text-[#3f4a23]">
-                    <span className="flex items-center gap-2">
-                      <span className="text-[#8db153] font-semibold">#{idx + 1}</span>
-                      {entry.name}
-                    </span>
-                    <span className="font-semibold">{entry.goats}</span>
+                <div className="rounded-xl border border-[#d9e5c2] bg-[#f9fbf2] p-3 shadow-inner">
+                  <div className="flex items-center justify-between text-sm font-semibold text-[#3f4a23] mb-2">
+                    <span>Goat Dice</span>
+                    <span>🐐</span>
                   </div>
-                ))}
+                  <div className="divide-y divide-[#e3ebd2]">
+                    {stats.goatLeaderboard.map((entry, idx) => (
+                      <div key={entry.name} className="flex items-center justify-between py-2 text-sm text-[#3f4a23]">
+                        <span className="flex items-center gap-2">
+                          <span className="text-[#8db153] font-semibold">#{idx + 1}</span>
+                          {entry.name}
+                        </span>
+                        <span className="font-semibold">🐐 {entry.goats}</span>
+                      </div>
+                    ))}
                 {stats.goatLeaderboard.length === 0 && (
                   <div className="py-2 text-sm text-[#6b744d]">No Goat Dice games yet.</div>
                 )}
