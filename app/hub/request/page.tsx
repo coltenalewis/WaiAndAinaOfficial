@@ -56,6 +56,7 @@ export default function HubRequestPage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [statusOptions, setStatusOptions] = useState<Option[]>([]);
   const [requestTypeOptions, setRequestTypeOptions] = useState<Option[]>([]);
+  const [requestTypeFilter, setRequestTypeFilter] = useState("All");
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createDesc, setCreateDesc] = useState("");
@@ -150,9 +151,12 @@ export default function HubRequestPage() {
         : true;
       const statusMatch =
         statusFilter === "All" || r.status.toLowerCase() === statusFilter.toLowerCase();
-      return mine && statusMatch;
+      const typeMatch =
+        requestTypeFilter === "All" ||
+        r.requestType?.name?.toLowerCase() === requestTypeFilter.toLowerCase();
+      return mine && statusMatch && typeMatch;
     });
-  }, [requests, onlyMine, sessionName, statusFilter]);
+  }, [requests, onlyMine, sessionName, statusFilter, requestTypeFilter]);
 
   const nameWordCount = useMemo(
     () => createName.trim().split(/\s+/).filter(Boolean).length,
@@ -376,20 +380,20 @@ export default function HubRequestPage() {
 
       <div className="rounded-xl border border-[#d5d7bc] bg-white/70 p-4 shadow-sm space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#556036]">
-              <input
-                type="checkbox"
-                checked={onlyMine}
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#556036]">
+                <input
+                  type="checkbox"
+                  checked={onlyMine}
                 onChange={(e) => setOnlyMine(e.target.checked)}
                 className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
               />
               Only my requests
-            </label>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#556036]">
-              Status
-              <select
-                value={statusFilter}
+              </label>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#556036]">
+                Status
+                <select
+                  value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="rounded-full border border-[#cdd7ab] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#4a5b2a] focus:outline-none focus:ring-2 focus:ring-[#a0b764]"
               >
@@ -397,9 +401,22 @@ export default function HubRequestPage() {
                 {statusOptions.map((opt) => (
                   <option key={opt.name}>{opt.name}</option>
                 ))}
-              </select>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#556036]">
+                Type
+                <select
+                  value={requestTypeFilter}
+                  onChange={(e) => setRequestTypeFilter(e.target.value)}
+                  className="rounded-full border border-[#cdd7ab] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#4a5b2a] focus:outline-none focus:ring-2 focus:ring-[#a0b764]"
+                >
+                  <option>All</option>
+                  {requestTypeOptions.map((opt) => (
+                    <option key={opt.name}>{opt.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
           {sessionName && (
             <span className="text-[11px] uppercase tracking-[0.14em] text-[#6b7348]">
               Viewing as <span className="font-semibold">{sessionName}</span>

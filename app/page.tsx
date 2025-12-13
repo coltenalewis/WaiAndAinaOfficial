@@ -133,7 +133,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f8f4e3] text-[#3b4224] flex flex-col">
+      <main className="min-h-screen bg-[#f8f4e3] text-[#3b4224] flex flex-col">
       {/* Top navigation */}
       <header className="sticky top-0 z-20 w-full bg-white/90 backdrop-blur shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
@@ -318,39 +318,60 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Hero */}
-      <section
-        id="home"
-        className="relative w-full bg-gradient-to-r from-[#e8e2cf] via-[#f5f1dd] to-[#dce6d0]"
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 grid md:grid-cols-2 gap-10 items-center">
-          <div className="space-y-4">
-            <p className="text-sm uppercase tracking-[0.24em] text-[#7a7f54]">Since 2023</p>
-            <h1 className="text-3xl sm:text-4xl font-semibold text-[#3b4224] leading-tight">
-              Sustainable Living, Ag Education, Conservation
-            </h1>
-            <p className="text-[#606740] text-sm leading-relaxed">
-              We welcome you to Wai &amp; Aina. Discover our farm life, conservation projects, and daily work hub all in one place.
-            </p>
-            <div className="flex flex-wrap gap-3 pt-2">
-              {heroButton("Explore the Farm", "#about", true)}
-              {heroButton("Open Guides", "/hub/guides/how-to")}
-            </div>
-          </div>
-          <div className="rounded-2xl overflow-hidden shadow-lg border border-[#d0c9a4] bg-white">
-            <div className="h-48 sm:h-64 bg-[url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center" />
-            <div className="p-6 space-y-2">
-              <p className="text-xs uppercase tracking-[0.22em] text-[#7a7f54]">About the farm</p>
-              <p className="text-sm text-[#4b5133] leading-relaxed">
-                We know how hard it can be to find quality raw milk in Hawaii. Our cows and farm team work to ensure every drop you enjoy comes from the freshest, cleanest milk possible.
+        {/* Hero */}
+        <section
+          id="home"
+          className="relative w-full overflow-hidden"
+          style={{
+            backgroundImage:
+              "linear-gradient(120deg, rgba(240,237,217,0.9), rgba(201,221,183,0.9)), url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <div className="pointer-events-none absolute -left-10 top-10 h-40 w-40 rounded-full bg-white/50 blur-3xl" />
+          <div className="pointer-events-none absolute right-0 bottom-0 h-56 w-56 rounded-full bg-[#b8d29b]/50 blur-3xl" />
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 grid md:grid-cols-2 gap-10 items-center">
+            <div className="space-y-5 bg-white/70 backdrop-blur rounded-2xl border border-white/60 shadow-lg p-6">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#5d7f3b] shadow-sm">
+                🐐 Since 2023
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-semibold text-[#2f331d] leading-tight drop-shadow-sm">
+                Sustainable Living, Ag Education, Conservation
+              </h1>
+              <p className="text-[#4b5133] text-sm leading-relaxed">
+                Step into Wai &amp; Aina’s world of regenerative farming, joyful animals, and hands-on learning. 🌿 Explore the land, peek at our guides, and hop into the work dashboard when you’re signed in.
               </p>
-              <Link href="#about" className="inline-flex items-center gap-2 text-sm font-semibold text-[#5d7f3b] underline underline-offset-4">
-                Our story
-              </Link>
+              <div className="flex flex-wrap gap-3 pt-2">
+                {heroButton("Explore the Farm", "#about", true)}
+                {heroButton("Open Guides", "/hub/guides/how-to")}
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3 shadow-sm">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Daily Flow</p>
+                  <p className="font-semibold text-[#3b4224]">❤️ Community-first</p>
+                </div>
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3 shadow-sm">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Field Notes</p>
+                  <p className="font-semibold text-[#3b4224]">✨ Guided &amp; playful</p>
+                </div>
+              </div>
+            </div>
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-[#d0c9a4] bg-white/85 backdrop-blur">
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/20 to-white/70" />
+              <div className="h-48 sm:h-64 bg-[url('https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center" />
+              <div className="p-6 space-y-3 relative z-10">
+                <p className="text-xs uppercase tracking-[0.22em] text-[#7a7f54]">Farm vibes</p>
+                <p className="text-sm text-[#4b5133] leading-relaxed">
+                  Fresh milk, happy goats, and a team that cares. We craft experiences that feel wholesome and a little bit magical—perfect for volunteers, friends, and curious visitors.
+                </p>
+                <Link href="#about" className="inline-flex items-center gap-2 text-sm font-semibold text-[#3b6e2c] underline underline-offset-4">
+                  Meet the herd →
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
       {/* About */}
       <section id="about" className="max-w-6xl mx-auto px-4 sm:px-6 py-12 space-y-8">

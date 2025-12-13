@@ -158,6 +158,7 @@ export default function HubSchedulePage() {
   const [activeView, setActiveView] = useState<"schedule" | "myTasks">(
     "schedule"
   );
+  const [showMineOnly, setShowMineOnly] = useState(false);
 
   const [taskMetaMap, setTaskMetaMap] = useState<Record<string, TaskMeta>>({});
   const [taskTypes, setTaskTypes] = useState<TaskTypeOption[]>([]);
@@ -396,6 +397,27 @@ export default function HubSchedulePage() {
 
   const showStandardSection =
     !isExternalVolunteer && (loading || error || hasStandardScheduleContent);
+
+  const scheduleDataForView = useMemo(() => {
+    if (!data) return null;
+    if (!showMineOnly || !currentUserName) return data;
+
+    const matchIndex = data.people.findIndex(
+      (p) => p.toLowerCase() === currentUserName.toLowerCase()
+    );
+
+    if (matchIndex < 0 || !data.cells[matchIndex]) {
+      return data;
+    }
+
+    return {
+      ...data,
+      people: [data.people[matchIndex]],
+      cells: [data.cells[matchIndex]],
+    };
+  }, [data, showMineOnly, currentUserName]);
+
+  const scheduleDataToRender = scheduleDataForView || data;
 
   const eveningSlots = useMemo(
     () =>
@@ -777,10 +799,6 @@ export default function HubSchedulePage() {
     await loadTaskDetails(baseTitle);
   }
 
-
-  // When a task box is clicked
-
-
   function closeModal() {
     setModalTask(null);
     setModalDetails(null);
@@ -880,11 +898,11 @@ export default function HubSchedulePage() {
               assigned with.
             </p>
 
-            <div className="flex flex-wrap gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setActiveView("schedule")}
-                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] border transition ${
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveView("schedule")}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] border transition ${
                   activeView === "schedule"
                     ? "bg-[#a0b764] text-white border-[#8fae4c]"
                     : "bg-white text-[#5d7f3b] border-[#d0c9a4]"
@@ -900,14 +918,23 @@ export default function HubSchedulePage() {
                     ? "bg-[#a0b764] text-white border-[#8fae4c]"
                     : "bg-white text-[#5d7f3b] border-[#d0c9a4]"
                 }`}
-              >
-                My Tasks
-              </button>
-            </div>
+                >
+                  My Tasks
+                </button>
+                <label className="inline-flex items-center gap-2 rounded-full border border-[#d0c9a4] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#4a5b2a] shadow-sm">
+                  <input
+                    type="checkbox"
+                    checked={showMineOnly}
+                    onChange={(e) => setShowMineOnly(e.target.checked)}
+                    className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                  />
+                  Only me
+                </label>
+              </div>
 
-            <div className="mt-3 rounded-lg bg-[#a0b764] px-3 py-3">
-              <div className="rounded-md bg-[#f8f4e3]">
-                {loading && (
+              <div className="mt-3 rounded-lg bg-[#a0b764] px-3 py-3">
+                <div className="rounded-md bg-[#f8f4e3]">
+                  {loading && (
                   <div className="px-4 py-6 text-sm text-center text-[#7a7f54]">
                     Loading schedule…
                   </div>
@@ -920,7 +947,7 @@ export default function HubSchedulePage() {
 
                 {!loading &&
                   !error &&
-                  data &&
+                  scheduleDataToRender &&
                   standardWorkSlots.length > 0 &&
                   activeView === "schedule" && (
                     <>
@@ -948,7 +975,7 @@ export default function HubSchedulePage() {
                           className="overflow-x-auto scroll-smooth pb-2"
                         >
                           <ScheduleGrid
-                            data={data}
+                            data={scheduleDataToRender}
                             workSlots={standardWorkSlots}
                             currentUserName={currentUserName}
                             currentSlotId={currentSlotId}

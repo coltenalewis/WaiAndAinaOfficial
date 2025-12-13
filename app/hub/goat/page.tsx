@@ -549,7 +549,7 @@ export default function GoatArcadePage() {
           <div>
             <h1 className="text-2xl font-semibold text-[#3b4224]">Goat Arcade</h1>
             <p className="text-sm text-[#556133]">
-              My freewill compelled me to make this, ur welcome 🐐. every 200 Run points adds one 🐐 to Goat Dice.
+              Hop fences for glory or roll the dice for extra 🐐. Every 200 Run points adds one 🐐 to Goat Dice.
             </p>
           </div>
         </div>
@@ -661,7 +661,7 @@ export default function GoatArcadePage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-[#3b4224]">Goat Dice</h2>
-                  <p className="text-sm text-[#556133]">Bet your 🐐 on LOW (2-6), SEVEN, or HIGH (8-12). SEVEN pays five 🐐 for every one you wager; the others double you up.</p>
+                  <p className="text-sm text-[#556133]">Bet your 🐐 on LOW (2–6), SEVEN, or HIGH (8–12). SEVEN pays five 🐐 for every one you wager; the others double you up.</p>
                 </div>
                 <div className="px-3 py-1 rounded-full bg-[#f2f6e6] text-xs font-semibold text-[#4f5d2a] shadow-inner">
                   Balance: 🐐 {stats.goats}
@@ -748,7 +748,7 @@ export default function GoatArcadePage() {
               <div className="rounded-xl border border-[#d9e5c2] bg-[#f4f8ea] p-4 shadow-inner text-sm text-[#3f4a23]">
                 <div className="font-semibold text-[#2f3618] mb-3">How to play Goat Dice</div>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  {["Place a bet and pick LOW (2-6), SEVEN, or HIGH (8-12).", "Two dice roll together. LOW/HIGH pay 2×; SEVEN pays 5×.", "Winnings pop right back into your 🐐 balance when you win.", "Treat it like a cozy farm game and enjoy the rolls!"]
+                  {["Place a bet and pick LOW (2–6), SEVEN, or HIGH (8–12).", "Two dice roll together. LOW/HIGH pay 2×; SEVEN pays 5×.", "Winnings pop right back into your 🐐 balance when you win.", "Treat it like a cozy farm game and enjoy the rolls!"]
                     .map((tip, idx) => (
                       <div
                         key={tip}
