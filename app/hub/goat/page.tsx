@@ -110,6 +110,36 @@ const PLINKO_BUCKETS: Array<{ label: string; multiplier: number }> = [
   { label: "🧀", multiplier: 5 },
 ];
 
+function buildPlinkoPath(targetIndex: number, columns: number) {
+  const steps = columns + 3;
+  const startCol = Math.floor(columns / 2);
+  const path: number[] = [startCol];
+
+  for (let i = 1; i < steps - 1; i++) {
+    const current = path[path.length - 1];
+    const remaining = steps - i - 1;
+    const distance = targetIndex - current;
+
+    const candidates = [-1, 0, 1]
+      .map((delta) => clamp(current + delta, 0, columns - 1))
+      .filter((pos, idx, arr) => arr.indexOf(pos) === idx)
+      .filter((pos) => Math.abs(targetIndex - pos) <= remaining + 1);
+
+    let next = current;
+    const preferred = current + Math.sign(distance);
+    if (candidates.includes(preferred)) {
+      next = preferred;
+    } else if (candidates.length) {
+      next = candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    path.push(clamp(next, 0, columns - 1));
+  }
+
+  path.push(targetIndex);
+  return path;
+}
+
 function DiceFace({ value, animate }: { value: number; animate?: boolean }) {
   const clampedValue = Math.max(1, Math.min(6, Math.round(value)));
   const pips = pipLayout[clampedValue] || pipLayout[1];
@@ -656,15 +686,7 @@ export default function GoatArcadePage() {
         PLINKO_BUCKETS.findIndex((bucket) => bucket.label === data.bucket)
       );
       const columns = PLINKO_BUCKETS.length;
-      const steps = 7;
-      const startCol = Math.floor(columns / 2);
-      const path: number[] = [startCol];
-      for (let i = 1; i < steps - 1; i++) {
-        const prev = path[i - 1];
-        const delta = [-1, 0, 1][Math.floor(Math.random() * 3)];
-        path.push(clamp(prev + delta, 0, columns - 1));
-      }
-      path.push(targetIndex >= 0 ? targetIndex : startCol);
+      const path = buildPlinkoPath(targetIndex, columns);
       setPlinkoPath(path);
 
       let step = 0;
@@ -1038,15 +1060,37 @@ export default function GoatArcadePage() {
             ))}
 
             <div
-              className={`absolute w-8 h-8 rounded-full flex items-center justify-center text-2xl shadow-lg transition-all duration-200 ease-out plinko-token ${
+              className={`absolute w-9 h-9 rounded-full flex items-center justify-center text-2xl shadow-lg transition-all duration-200 ease-out plinko-token ${
                 plinkoDropping ? "bg-white" : "bg-[#f9fbf2]"
               }`}
               style={{
-                left: `${((plinkoPath[plinkoStep] ?? Math.floor(PLINKO_BUCKETS.length / 2)) / PLINKO_BUCKETS.length) * 100 + 8}%`,
-                top: `${(plinkoStep / Math.max(plinkoPath.length - 1, 1)) * 78 + 4}%`,
+                left: `${(((plinkoPath[plinkoStep] ?? Math.floor(PLINKO_BUCKETS.length / 2)) + 0.5) / PLINKO_BUCKETS.length) * 100}%`,
+                top: `${(plinkoStep / Math.max(plinkoPath.length - 1, 1)) * 74 + 6}%`,
               }}
             >
               🐐
+            </div>
+
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="relative w-full h-[88%]">
+                {Array.from({ length: Math.max(PLINKO_BUCKETS.length + 1, 6) }).map(
+                  (_, rowIdx) => {
+                    const cols = PLINKO_BUCKETS.length;
+                    return Array.from({ length: cols }).map((__, colIdx) => {
+                      const offset = rowIdx % 2 === 0 ? 0.5 : 0;
+                      const left = (((colIdx + offset) / cols) * 100).toFixed(2);
+                      const top = ((rowIdx / (PLINKO_BUCKETS.length + 1)) * 78 + 4).toFixed(2);
+                      return (
+                        <span
+                          key={`${rowIdx}-${colIdx}`}
+                          className="absolute w-2 h-2 rounded-full bg-[#cdd8b2] shadow-sm"
+                          style={{ left: `${left}%`, top: `${top}%` }}
+                        />
+                      );
+                    });
+                  }
+                )}
+              </div>
             </div>
 
             <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">

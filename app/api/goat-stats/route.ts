@@ -298,12 +298,12 @@ export async function POST(req: Request) {
       }
 
       const buckets: Array<{ label: string; multiplier: number; weight: number }> = [
-        { label: "🌾", multiplier: 0, weight: 15 },
-        { label: "🐐", multiplier: 1, weight: 25 },
-        { label: "🐓", multiplier: 1.5, weight: 18 },
-        { label: "🐑", multiplier: 2, weight: 12 },
-        { label: "🐄", multiplier: 3, weight: 7 },
-        { label: "🧀", multiplier: 5, weight: 3 },
+        { label: "🌾", multiplier: 0, weight: 24 },
+        { label: "🐐", multiplier: 1, weight: 26 },
+        { label: "🐓", multiplier: 1.5, weight: 14 },
+        { label: "🐑", multiplier: 2, weight: 8 },
+        { label: "🐄", multiplier: 3, weight: 4 },
+        { label: "🧀", multiplier: 5, weight: 1 },
       ];
 
       const totalWeight = buckets.reduce((sum, bucket) => sum + bucket.weight, 0);
