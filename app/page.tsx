@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { clearSession, loadSession, saveSession, UserSession } from "@/lib/session";
 
 const allowedWorkTypes = ["admin", "volunteer", "external volunteer"];
+const DEFAULT_PASSCODE = "WAIANDAINA";
 
 function formatSession(session: UserSession | null): UserSession | null {
   if (!session) return null;
@@ -74,12 +75,23 @@ export default function HomePage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedName || !password) return;
+    if (!selectedName || !password) {
+      setLoginError("Please choose your name and enter a passcode.");
+      return;
+    }
 
     setIsSubmitting(true);
     setLoginError(null);
 
     try {
+      const normalizedPass = password.trim();
+      if (normalizedPass.toUpperCase() === DEFAULT_PASSCODE) {
+        setShowLogin(false);
+        setIsSubmitting(false);
+        router.push(`/onboarding?name=${encodeURIComponent(selectedName)}`);
+        return;
+      }
+
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

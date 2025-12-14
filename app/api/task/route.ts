@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { createComment, queryDatabase, retrieveComments, updatePage } from "@/lib/notion";
+import {
+  createComment,
+  queryDatabase,
+  retrieveComments,
+  updatePage,
+} from "@/lib/notion";
 
-const TASKS_DB_ID = process.env.NOTION_TASKS_DATABASE_ID;
+const TASKS_DB_ID = process.env.NOTION_TASKS_DATABASE_ID as string | undefined;
 
 // ─────────────────────────────────────────────
 // Notion property keys
@@ -29,39 +34,69 @@ function getPlainText(prop: any): string {
 
   switch (prop.type) {
     case "title":
-      return (prop.title || []).map((t: any) => t.plain_text || "").join("").trim();
+      return (prop.title || [])
+        .map((t: any) => t.plain_text || "")
+        .join("")
+        .trim();
     case "rich_text":
-      return (prop.rich_text || []).map((t: any) => t.plain_text || "").join("").trim();
+      return (prop.rich_text || [])
+        .map((t: any) => t.plain_text || "")
+        .join("")
+        .trim();
     case "select":
       return prop.select?.name || "";
     case "multi_select":
-      return (prop.multi_select || []).map((s: any) => s.name || "").join(", ").trim();
+      return (prop.multi_select || [])
+        .map((s: any) => s.name || "")
+        .join(", ")
+        .trim();
     case "url":
       return prop.url || "";
     case "files":
-      return (prop.files || []).map((f: any) => f.name || "").join(", ").trim();
+      return (prop.files || [])
+        .map((f: any) => f.name || "")
+        .join(", ")
+        .trim();
     default:
       if (Array.isArray(prop.rich_text)) {
-        return prop.rich_text.map((t: any) => t.plain_text || "").join("").trim();
+        return prop.rich_text
+          .map((t: any) => t.plain_text || "")
+          .join("")
+          .trim();
       }
       return "";
   }
 }
 
-function parseLinks(raw: string): { label: string; url: string }[] {
-  if (!raw.trim()) return [];
+function parseLinks(prop: any): { label: string; url: string }[] {
+  if (!prop) return [];
 
-  return raw
+  // If "Links" is rich_text with embedded href/link
+  if (prop.type === "rich_text" && Array.isArray(prop.rich_text)) {
+    return prop.rich_text
+      .map((t: any) => {
+        const content = (t?.plain_text || "").trim();
+        const url = t?.href || t?.text?.link?.url || "";
+        if (!content && !url) return null;
+        return { label: content || url, url: url || content };
+      })
+      .filter(Boolean) as { label: string; url: string }[];
+  }
+
+  // If "Links" is a url property
+  if (prop.type === "url" && prop.url) {
+    return [{ label: prop.url, url: prop.url }];
+  }
+
+  // Fallback: parse comma-separated plaintext
+  const plain = getPlainText(prop).trim();
+  if (!plain) return [];
+
+  return plain
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean)
-    .map((entry) => {
-      const bracketMatch = entry.match(/^\[(.+?)\](.+)$/);
-      if (bracketMatch) {
-        return { label: bracketMatch[1].trim(), url: bracketMatch[2].trim() };
-      }
-      return { label: entry, url: entry };
-    });
+    .map((entry) => ({ label: entry, url: entry }));
 }
 
 async function findTaskPageByName(name: string) {
@@ -77,7 +112,9 @@ async function findTaskPageByName(name: string) {
     },
   });
 
-  if (data.results?.length) return data.results[0];
+  if (data.results?.length) {
+    return data.results[0];
+  }
 
   // Fallback: return the first page if no exact match
   const fallback = await queryDatabase(TASKS_DB_ID, { page_size: 1 });
@@ -85,11 +122,14 @@ async function findTaskPageByName(name: string) {
 }
 
 // ─────────────────────────────────────────────
-// GET — fetch task details
+// GET — fetch a task by name
 // ─────────────────────────────────────────────
 export async function GET(req: Request) {
   if (!TASKS_DB_ID) {
-    return NextResponse.json({ error: "NOTION_TASKS_DATABASE_ID is not set" }, { status: 500 });
+    return NextResponse.json(
+      { error: "NOTION_TASKS_DATABASE_ID is not set" },
+      { status: 500 }
+    );
   }
 
   const { searchParams } = new URL(req.url);
@@ -101,19 +141,24 @@ export async function GET(req: Request) {
 
   try {
     const page = await findTaskPageByName(name);
-    if (!page) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    if (!page) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
 
     const props = page.properties || {};
     const pageName = getPlainText(props[TASK_NAME_PROPERTY_KEY]) || name;
     const description = getPlainText(props[TASK_DESC_PROPERTY_KEY]);
     const status = getPlainText(props[TASK_STATUS_PROPERTY_KEY]);
 
-    const links = parseLinks(getPlainText(props[TASK_LINKS_PROPERTY_KEY]));
+    const links = parseLinks(props[TASK_LINKS_PROPERTY_KEY]);
 
     const typeProp = props[TASK_TYPE_PROPERTY_KEY];
     const taskType =
       typeProp?.type === "select"
-        ? { name: typeProp.select?.name || "", color: typeProp.select?.color || "default" }
+        ? {
+            name: typeProp.select?.name || "",
+            color: typeProp.select?.color || "default",
+          }
         : { name: "", color: "default" };
 
     const photosProp = props[TASK_PHOTOS_PROPERTY_KEY];
@@ -123,8 +168,8 @@ export async function GET(req: Request) {
             const fname = file.name || "Attachment";
             const url = file.external?.url || file.file?.url || "";
             const lower = fname.toLowerCase();
-            let kind: "image" | "video" | "audio" | "file" = "file";
 
+            let kind: "image" | "video" | "audio" | "file" = "file";
             if (/(\.png|\.jpe?g|\.gif|\.webp|\.avif)$/i.test(lower)) kind = "image";
             else if (/(\.mp4|\.mov|\.m4v)$/i.test(lower)) kind = "video";
             else if (/(\.mp3|\.wav|\.m4a)$/i.test(lower)) kind = "audio";
@@ -139,8 +184,11 @@ export async function GET(req: Request) {
     const comments = (commentsRaw.results || []).map((c: any) => {
       const rawText = getPlainText(c.rich_text) || "";
       const colonIndex = rawText.indexOf(":");
-      const parsedAuthor = colonIndex > -1 ? rawText.slice(0, colonIndex).trim() : "";
-      const parsedMessage = colonIndex > -1 ? rawText.slice(colonIndex + 1).trim() : rawText;
+
+      const parsedAuthor =
+        colonIndex > -1 ? rawText.slice(0, colonIndex).trim() : "";
+      const parsedMessage =
+        colonIndex > -1 ? rawText.slice(colonIndex + 1).trim() : rawText;
 
       return {
         id: c.id,
@@ -172,19 +220,27 @@ export async function GET(req: Request) {
 // ─────────────────────────────────────────────
 export async function PATCH(req: Request) {
   if (!TASKS_DB_ID) {
-    return NextResponse.json({ error: "NOTION_TASKS_DATABASE_ID is not set" }, { status: 500 });
+    return NextResponse.json(
+      { error: "NOTION_TASKS_DATABASE_ID is not set" },
+      { status: 500 }
+    );
   }
 
   const body = await req.json().catch(() => null);
   const { name, status } = body || {};
 
   if (!name || !status) {
-    return NextResponse.json({ error: "Missing task name or status" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing task name or status" },
+      { status: 400 }
+    );
   }
 
   try {
     const page = await findTaskPageByName(name);
-    if (!page) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    if (!page) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
 
     await updatePage(page.id, {
       [TASK_STATUS_PROPERTY_KEY]: { select: { name: status } },
@@ -193,7 +249,10 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ success: true, status });
   } catch (err) {
     console.error("PATCH /task failed:", err);
-    return NextResponse.json({ error: "Failed to update status" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update status" },
+      { status: 500 }
+    );
   }
 }
 
@@ -202,25 +261,41 @@ export async function PATCH(req: Request) {
 // ─────────────────────────────────────────────
 export async function POST(req: Request) {
   if (!TASKS_DB_ID) {
-    return NextResponse.json({ error: "NOTION_TASKS_DATABASE_ID is not set" }, { status: 500 });
+    return NextResponse.json(
+      { error: "NOTION_TASKS_DATABASE_ID is not set" },
+      { status: 500 }
+    );
   }
 
   const body = await req.json().catch(() => null);
   const { name, comment } = body || {};
 
   if (!name || !comment) {
-    return NextResponse.json({ error: "Missing task name or comment" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing task name or comment" },
+      { status: 400 }
+    );
   }
 
   try {
     const page = await findTaskPageByName(name);
-    if (!page) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    if (!page) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
 
-    await createComment(page.id, [{ type: "text", text: { content: comment } }]);
+    await createComment(page.id, [
+      {
+        type: "text",
+        text: { content: comment },
+      },
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("POST /task failed:", err);
-    return NextResponse.json({ error: "Failed to add comment" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to add comment" },
+      { status: 500 }
+    );
   }
 }

@@ -32,6 +32,7 @@ type TaskClickPayload = {
   slot: Slot;
   task: string;          // full cell text
   groupNames: string[];  // all people sharing that merged box
+  isMeal?: boolean;
 };
 
 type TaskComment = {
@@ -163,11 +164,12 @@ export default function HubSchedulePage() {
   const [taskMetaMap, setTaskMetaMap] = useState<Record<string, TaskMeta>>({});
   const [taskTypes, setTaskTypes] = useState<TaskTypeOption[]>([]);
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
-  
+
   // Modal state
   const [modalTask, setModalTask] = useState<TaskClickPayload | null>(null);
   const [modalDetails, setModalDetails] = useState<TaskDetails | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
+  const [modalIsMeal, setModalIsMeal] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
@@ -181,6 +183,7 @@ export default function HubSchedulePage() {
 
   const isExternalVolunteer =
     (currentUserType || "").toLowerCase() === "external volunteer";
+  const showFullTaskDetail = !modalIsMeal;
 
   // Get logged-in user from session
   useEffect(() => {
@@ -779,6 +782,7 @@ export default function HubSchedulePage() {
   async function handleTaskClick(taskPayload: TaskClickPayload) {
     setModalTask(taskPayload);
     setModalDetails(null);
+    setModalIsMeal(!!taskPayload.isMeal);
     setCommentDraft("");
 
     const baseTitle = taskBaseName(taskPayload.task || "");
@@ -802,12 +806,13 @@ export default function HubSchedulePage() {
   function closeModal() {
     setModalTask(null);
     setModalDetails(null);
+    setModalIsMeal(false);
     setCommentDraft("");
   }
 
   // Auto-refresh task details while the modal is open
   useEffect(() => {
-    if (!modalTask) return undefined;
+    if (!modalTask || modalIsMeal) return undefined;
     const taskName = modalTask.task.split("\n")[0].trim();
     if (!taskName) return undefined;
 
@@ -816,7 +821,7 @@ export default function HubSchedulePage() {
       15_000
     );
     return () => clearInterval(interval);
-  }, [modalTask]);
+  }, [modalIsMeal, modalTask]);
 
   return (
     <>
@@ -882,6 +887,7 @@ export default function HubSchedulePage() {
                   )}
                   currentUserName={currentUserName}
                   taskMetaMap={taskMetaMap}
+                  onTaskClick={handleTaskClick}
                 />
               ))}
             </div>
@@ -1249,29 +1255,30 @@ export default function HubSchedulePage() {
             </div>
 
             <div className="space-y-4">
-              {(() => {
-                const fallbackMeta =
-                  taskMetaMap[taskBaseName(modalTask.task)] || {};
-                const typeName =
-                  modalDetails?.taskType?.name || fallbackMeta.typeName;
-                const typeColor =
-                  modalDetails?.taskType?.color || fallbackMeta.typeColor;
+              {showFullTaskDetail &&
+                (() => {
+                  const fallbackMeta =
+                    taskMetaMap[taskBaseName(modalTask.task)] || {};
+                  const typeName =
+                    modalDetails?.taskType?.name || fallbackMeta.typeName;
+                  const typeColor =
+                    modalDetails?.taskType?.color || fallbackMeta.typeColor;
 
-                if (!typeName) return null;
+                  if (!typeName) return null;
 
-                return (
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-[4px] text-[11px] font-semibold shadow-sm ${typeColorClasses(
-                        typeColor
-                      )}`}
-                    >
-                      <span className="h-2 w-2 rounded-full bg-current opacity-70" />
-                      {typeName}
-                    </span>
-                  </div>
-                );
-              })()}
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-[4px] text-[11px] font-semibold shadow-sm ${typeColorClasses(
+                          typeColor
+                        )}`}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-current opacity-70" />
+                        {typeName}
+                      </span>
+                    </div>
+                  );
+                })()}
 
               <div className="rounded-lg border border-[#e2d7b5] bg-white/70 px-4 py-3 space-y-3">
                 {modalTask.task.includes("\n") && (
@@ -1303,7 +1310,7 @@ export default function HubSchedulePage() {
                   )}
                 </div>
 
-                {!modalLoading && modalDetails?.estimatedTime ? (
+                {showFullTaskDetail && !modalLoading && modalDetails?.estimatedTime ? (
                   <div className="space-y-1">
                     <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
                       Estimated Time for Completion
@@ -1314,13 +1321,15 @@ export default function HubSchedulePage() {
                   </div>
                 ) : null}
 
-                  {!modalLoading && modalDetails?.links?.length ? (
-                    <div className="space-y-2">
-                      <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
-                        Relevant Links
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {modalDetails.links.map((link) => (
+                {showFullTaskDetail &&
+                !modalLoading &&
+                modalDetails?.links?.length ? (
+                  <div className="space-y-2">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
+                      Relevant Links
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {modalDetails.links.map((link) => (
                         <a
                           key={`${link.url}-${link.label}`}
                           href={link.url}
@@ -1361,184 +1370,190 @@ export default function HubSchedulePage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-[#e2d7b5] bg-white/70 px-4 py-3 space-y-3">
-                <div>
+              {showFullTaskDetail && (
+                <div className="rounded-lg border border-[#e2d7b5] bg-white/70 px-4 py-3 space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
+                          Comments
+                        </p>
+                        <p className="text-[11px] text-[#6a6748]">
+                          This is for comments, feedback, concerns, and request.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                    {modalLoading && (
+                      <p className="text-[11px] italic text-[#8e875d]">
+                        Loading comments…
+                      </p>
+                    )}
+                    {!modalLoading && modalDetails?.comments?.length === 0 && (
+                      <p className="text-[11px] text-[#7a7f54] italic">
+                        No comments yet.
+                      </p>
+                    )}
+                    {!modalLoading &&
+                      modalDetails?.comments?.map((comment) => (
+                        <div
+                          key={comment.id}
+                          className="rounded-md border border-[#e1d8b6] bg-[#f7f3de] px-3 py-2"
+                        >
+                          <p className="text-[12px] text-[#3f3c2d] leading-snug">
+                            {comment.text || "(No text)"}
+                          </p>
+                          <p className="mt-1 text-[10px] text-[#8a8256]">
+                            {comment.author || "Unknown"} • {new Date(comment.createdTime).toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      type="text"
+                      value={commentDraft}
+                      onChange={(e) => setCommentDraft(e.target.value)}
+                      placeholder="Add a comment"
+                      className="flex-1 rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3f3c2d] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
+                      disabled={!isOnline}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        submitTaskComment(modalDetails?.name || modalTask.task)
+                      }
+                      disabled={
+                        !isOnline || commentSubmitting || !commentDraft.trim()
+                      }
+                      className="w-full sm:w-auto rounded-md bg-[#a0b764] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f9f9ec] shadow-md hover:bg-[#95ad5e] disabled:opacity-60"
+                    >
+                      {commentSubmitting ? "Posting…" : "Post"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {showFullTaskDetail && (
+                <div className="rounded-lg border border-[#e2d7b5] bg-white/70 px-4 py-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
-                        Comments
+                        Task Media
                       </p>
                       <p className="text-[11px] text-[#6a6748]">
-                        This is for comments, feedback, concerns, and request.
+                        Existing media for this task.
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
-                  {modalLoading && (
-                    <p className="text-[11px] italic text-[#8e875d]">
-                      Loading comments…
-                    </p>
-                  )}
-                  {!modalLoading && modalDetails?.comments?.length === 0 && (
-                    <p className="text-[11px] text-[#7a7f54] italic">
-                      No comments yet.
-                    </p>
-                  )}
-                  {!modalLoading &&
-                    modalDetails?.comments?.map((comment) => (
-                      <div
-                        key={comment.id}
-                        className="rounded-md border border-[#e1d8b6] bg-[#f7f3de] px-3 py-2"
-                      >
-                        <p className="text-[12px] text-[#3f3c2d] leading-snug">
-                          {comment.text || "(No text)"}
-                        </p>
-                        <p className="mt-1 text-[10px] text-[#8a8256]">
-                          {comment.author || "Unknown"} • {new Date(comment.createdTime).toLocaleString()}
-                        </p>
-                      </div>
-                    ))}
-                </div>
+                  <div className="space-y-2">
+                    {modalDetails?.media?.length ? (
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {modalDetails.media.map((item) => {
+                          if (item.kind === "video") {
+                            return (
+                              <div
+                                key={item.url}
+                                className="overflow-hidden rounded-md border border-[#e2d7b5] bg-[#f7f3de]"
+                              >
+                                <video
+                                  src={item.url}
+                                  controls
+                                  className="h-36 w-full object-cover"
+                                />
+                                <p className="truncate px-2 py-1 text-[10px] text-[#5b593c]">
+                                  {item.name}
+                                </p>
+                              </div>
+                            );
+                          }
 
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <input
-                    type="text"
-                    value={commentDraft}
-                    onChange={(e) => setCommentDraft(e.target.value)}
-                    placeholder="Add a comment"
-                    className="flex-1 rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3f3c2d] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
-                    disabled={!isOnline}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      submitTaskComment(modalDetails?.name || modalTask.task)
-                    }
-                    disabled={
-                      !isOnline || commentSubmitting || !commentDraft.trim()
-                    }
-                    className="w-full sm:w-auto rounded-md bg-[#a0b764] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f9f9ec] shadow-md hover:bg-[#95ad5e] disabled:opacity-60"
-                  >
-                    {commentSubmitting ? "Posting…" : "Post"}
-                  </button>
-                </div>
-              </div>
+                          if (item.kind === "audio") {
+                            return (
+                              <div
+                                key={item.url}
+                                className="rounded-md border border-[#e2d7b5] bg-[#f7f3de] p-2"
+                              >
+                                <p className="truncate text-[11px] font-semibold text-[#5b593c]">
+                                  {item.name}
+                                </p>
+                                <audio src={item.url} controls className="mt-2 w-full" />
+                              </div>
+                            );
+                          }
 
-              <div className="rounded-lg border border-[#e2d7b5] bg-white/70 px-4 py-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
-                      Task Media
-                    </p>
-                    <p className="text-[11px] text-[#6a6748]">
-                      Existing media for this task.
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {modalDetails?.media?.length ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {modalDetails.media.map((item) => {
-                        if (item.kind === "video") {
                           return (
-                            <div
+                            <a
                               key={item.url}
-                              className="overflow-hidden rounded-md border border-[#e2d7b5] bg-[#f7f3de]"
+                              href={item.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group block overflow-hidden rounded-md border border-[#e2d7b5] bg-[#f7f3de]"
                             >
-                              <video
-                                src={item.url}
-                                controls
-                                className="h-36 w-full object-cover"
-                              />
+                              <div className="aspect-square w-full overflow-hidden">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={item.url}
+                                  alt={item.name}
+                                  className="h-full w-full object-cover transition group-hover:scale-105"
+                                />
+                              </div>
                               <p className="truncate px-2 py-1 text-[10px] text-[#5b593c]">
                                 {item.name}
                               </p>
-                            </div>
+                            </a>
                           );
-                        }
-
-                        if (item.kind === "audio") {
-                          return (
-                            <div
-                              key={item.url}
-                              className="rounded-md border border-[#e2d7b5] bg-[#f7f3de] p-2"
-                            >
-                              <p className="truncate text-[11px] font-semibold text-[#5b593c]">
-                                {item.name}
-                              </p>
-                              <audio src={item.url} controls className="mt-2 w-full" />
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <a
-                            key={item.url}
-                            href={item.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group block overflow-hidden rounded-md border border-[#e2d7b5] bg-[#f7f3de]"
-                          >
-                            <div className="aspect-square w-full overflow-hidden">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={item.url}
-                                alt={item.name}
-                                className="h-full w-full object-cover transition group-hover:scale-105"
-                              />
-                            </div>
-                            <p className="truncate px-2 py-1 text-[10px] text-[#5b593c]">
-                              {item.name}
-                            </p>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-[#7a7f54] italic">
-                      No media uploaded for this task yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-[#e2d7b5] bg-white/70 px-4 py-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
-                      Status update
-                    </p>
-                    <p className="text-[11px] text-[#6a6748]">
-                      Update Task Status
-                    </p>
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[#7a7f54] italic">
+                        No media uploaded for this task yet.
+                      </p>
+                    )}
                   </div>
-                  <StatusBadge
-                    status={modalDetails?.status}
-                    color={statusColorLookup[modalDetails?.status || ""]}
-                  />
                 </div>
-                <select
-                  value={modalDetails?.status || ""}
-                  onChange={(e) =>
-                    updateTaskStatus(
-                      e.target.value,
-                      modalDetails?.name || modalTask.task
-                    )
-                  }
-                  className="w-full rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3f3c2d] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
-                  disabled={!modalDetails || modalLoading || !isOnline}
-                >
-                  <option value="" disabled>
-                    Select a status
-                  </option>
-                  {statusOptions.map((option, idx) => (
-                    <option key={option.name} value={option.name}>
-                      {idx + 1}. {option.name}
+              )}
+
+              {showFullTaskDetail && (
+                <div className="rounded-lg border border-[#e2d7b5] bg-white/70 px-4 py-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
+                        Status update
+                      </p>
+                      <p className="text-[11px] text-[#6a6748]">
+                        Update Task Status
+                      </p>
+                    </div>
+                    <StatusBadge
+                      status={modalDetails?.status}
+                      color={statusColorLookup[modalDetails?.status || ""]}
+                    />
+                  </div>
+                  <select
+                    value={modalDetails?.status || ""}
+                    onChange={(e) =>
+                      updateTaskStatus(
+                        e.target.value,
+                        modalDetails?.name || modalTask.task
+                      )
+                    }
+                    className="w-full rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3f3c2d] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
+                    disabled={!modalDetails || modalLoading || !isOnline}
+                  >
+                    <option value="" disabled>
+                      Select a status
                     </option>
-                  ))}
-                </select>
-              </div>
+                    {statusOptions.map((option, idx) => (
+                      <option key={option.name} value={option.name}>
+                        {idx + 1}. {option.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="flex justify-end">
                 <button
@@ -1564,11 +1579,13 @@ function MealBlock({
   assignments,
   currentUserName,
   taskMetaMap,
+  onTaskClick,
 }: {
   slot: Slot;
   assignments: MealAssignment[];
   currentUserName: string | null;
   taskMetaMap?: Record<string, TaskMeta>;
+  onTaskClick?: (payload: TaskClickPayload) => void;
 }) {
   const icon = getMealIcon(slot.label);
   const normalizedUser = currentUserName?.toLowerCase() ?? "";
@@ -1594,11 +1611,23 @@ function MealBlock({
           );
           const meta = taskMetaMap?.[taskBaseName(a.task)];
           const typeClass = typeColorClasses(meta?.typeColor);
+          const primaryPerson = includesUser
+            ? currentUserName || a.people[0] || "Team"
+            : a.people[0] || currentUserName || "Team";
 
           return (
             <button
               key={a.task}
               type="button"
+              onClick={() =>
+                onTaskClick?.({
+                  person: primaryPerson,
+                  slot,
+                  task: a.task,
+                  groupNames: a.people,
+                  isMeal: true,
+                })
+              }
               className={`w-full text-left rounded-md border px-3 py-2 flex items-center justify-between text-sm shadow-sm transition ${typeClass} ${
                 includesUser ? "ring-2 ring-[#f0d38d]" : "hover:shadow"
               }`}
