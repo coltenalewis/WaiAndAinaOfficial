@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveSession, UserSession } from "@/lib/session";
@@ -13,7 +13,7 @@ function formatSession(session: UserSession | null): UserSession | null {
   return { ...session, userType: type || null };
 }
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -296,5 +296,13 @@ export default function OnboardingPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-[#3b4224]">Loading onboarding…</div>}>
+      <OnboardingContent />
+    </Suspense>
   );
 }
