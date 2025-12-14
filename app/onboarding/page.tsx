@@ -17,10 +17,6 @@ function OnboardingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [users, setUsers] = useState<string[]>([]);
-  const [usersLoading, setUsersLoading] = useState(true);
-  const [usersError, setUsersError] = useState<string | null>(null);
-
   const [selectedName, setSelectedName] = useState<string>("");
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
@@ -29,37 +25,17 @@ function OnboardingContent() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const presetName = searchParams.get("name") || "";
-
+  const isNameLocked = !!presetName;
   useEffect(() => {
-    async function loadUsers() {
-      setUsersLoading(true);
-      setUsersError(null);
-      try {
-        const res = await fetch("/api/users");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const list = data.users || [];
-        setUsers(list);
-        if (presetName) {
-          const match = list.find(
-            (u: string) => u.toLowerCase() === presetName.toLowerCase()
-          );
-          if (match) setSelectedName(match);
-        }
-      } catch (e) {
-        console.error("Failed to load users", e);
-        setUsersError("Unable to load users right now.");
-      } finally {
-        setUsersLoading(false);
-      }
+    if (presetName) {
+      setSelectedName(presetName);
     }
-
-    loadUsers();
   }, [presetName]);
 
   const canSubmit = useMemo(() => {
+    const nameValue = selectedName.trim();
     return (
-      !!selectedName &&
+      !!nameValue &&
       newPass.trim().length >= 4 &&
       newPass === confirmPass &&
       !submitting
@@ -70,6 +46,8 @@ function OnboardingContent() {
     e.preventDefault();
     if (!canSubmit) return;
 
+    const nameValue = selectedName.trim();
+
     setSubmitting(true);
     setError(null);
     setSuccess(null);
@@ -79,7 +57,7 @@ function OnboardingContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: selectedName,
+          name: nameValue,
           currentPassword: DEFAULT_PASSCODE,
           newPassword: newPass,
         }),
@@ -97,13 +75,13 @@ function OnboardingContent() {
       const loginRes = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: selectedName, password: newPass }),
+        body: JSON.stringify({ name: nameValue, password: newPass }),
       });
 
       if (loginRes.ok) {
         const loginJson = await loginRes.json();
         const session: UserSession = {
-          name: selectedName,
+          name: nameValue,
           userType: loginJson.userType || null,
           userTypeColor: loginJson.userTypeColor || null,
         };
@@ -158,28 +136,22 @@ function OnboardingContent() {
                 <label className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6b6f4c]">
                   Your name
                 </label>
-                <select
+                <input
                   value={selectedName}
-                  onChange={(e) => setSelectedName(e.target.value)}
-                  disabled={usersLoading || !!usersError || users.length === 0}
-                  className="w-full rounded-md border border-[#c8cba0] bg-white px-4 py-3 text-sm font-medium text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {usersLoading && <option>Loading users…</option>}
-                  {!usersLoading && usersError && <option>Error loading users</option>}
-                  {!usersLoading && !usersError && users.length === 0 && (
-                    <option>No users found</option>
-                  )}
-                  {!usersLoading && !usersError && users.length > 0 && (
-                    <>
-                      <option value="">Choose your profile…</option>
-                      {users.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </>
-                  )}
-                </select>
+                  onChange={(e) => !isNameLocked && setSelectedName(e.target.value)}
+                  disabled={isNameLocked}
+                  placeholder="Type your name exactly as it appears in Notion"
+                  className="w-full rounded-md border border-[#c8cba0] bg-white px-4 py-3 text-sm font-medium text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c] disabled:cursor-not-allowed disabled:bg-[#f7f3df]"
+                />
+                {isNameLocked ? (
+                  <p className="text-[11px] text-[#7a7f54]">
+                    This onboarding link is locked to <strong>{presetName}</strong>. Return home to switch profiles.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-[#7a7f54]">
+                    Enter your own name to update your passcode. New users should contact an admin for access.
+                  </p>
+                )}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
