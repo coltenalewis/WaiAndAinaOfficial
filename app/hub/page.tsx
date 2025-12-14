@@ -165,15 +165,6 @@ export default function HubSchedulePage() {
   const [taskTypes, setTaskTypes] = useState<TaskTypeOption[]>([]);
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
 
-  const [activeView, setActiveView] = useState<"schedule" | "myTasks">(
-    "schedule"
-  );
-  const [showMineOnly, setShowMineOnly] = useState(false);
-
-  const [taskMetaMap, setTaskMetaMap] = useState<Record<string, TaskMeta>>({});
-  const [taskTypes, setTaskTypes] = useState<TaskTypeOption[]>([]);
-  const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
-  
   // Modal state
   const [modalTask, setModalTask] = useState<TaskClickPayload | null>(null);
   const [modalDetails, setModalDetails] = useState<TaskDetails | null>(null);
