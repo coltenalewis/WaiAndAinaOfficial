@@ -88,7 +88,6 @@ function parseLinks(prop: any): { label: string; url: string }[] {
     return { label: trimmed, url: trimmed };
   };
 
-  // Notion rich_text can include href/link urls
   if (prop.type === "rich_text" && Array.isArray(prop.rich_text)) {
     return prop.rich_text
       .map((t: any) => {
@@ -117,7 +116,11 @@ function parseLinks(prop: any): { label: string; url: string }[] {
     .filter(Boolean) as { label: string; url: string }[];
 }
 
-function parseMedia(filesProp: any): { name: string; url: string; kind: "image" | "video" | "audio" | "file" }[] {
+function parseMedia(filesProp: any): {
+  name: string;
+  url: string;
+  kind: "image" | "video" | "audio" | "file";
+}[] {
   if (!filesProp || filesProp.type !== "files") return [];
 
   return (filesProp.files || []).map((file: any) => {
@@ -319,6 +322,7 @@ export async function PATCH(req: Request) {
     }
 
     if (description !== undefined) {
+      // ✅ FIX: correct constant + no stray function-call parentheses
       properties[TASK_DESC_PROPERTY_KEY] = {
         rich_text: description
           ? [{ type: "text", text: { content: description } }]
@@ -341,7 +345,6 @@ export async function PATCH(req: Request) {
     }
 
     if (links !== undefined) {
-      // Store links as rich_text so you can paste multiple lines/commas/etc.
       properties[TASK_LINKS_PROPERTY_KEY] = {
         rich_text: links ? [{ type: "text", text: { content: links } }] : [],
       };
@@ -357,7 +360,6 @@ export async function PATCH(req: Request) {
 
     await updatePage(page.id, properties);
 
-    // Return updated task details (useful for your UI)
     const refreshed = await findTaskPageByName(name);
     const payload = refreshed ? await buildTaskPayload(refreshed, name) : { success: true };
 
