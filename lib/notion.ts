@@ -75,7 +75,8 @@ export async function queryAllDatabasePages(
 
 export async function createPageInDatabase(
   databaseId: string,
-  properties: any
+  properties: any,
+  children?: any[]
 ) {
   const res = await fetch(`${NOTION_BASE_URL}/pages`, {
     method: "POST",
@@ -84,13 +85,45 @@ export async function createPageInDatabase(
       "Notion-Version": NOTION_VERSION,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ parent: { database_id: databaseId }, properties }),
+    body: JSON.stringify({
+      parent: { database_id: databaseId },
+      properties,
+      ...(children?.length ? { children } : {}),
+    }),
   });
 
   if (!res.ok) {
     const text = await res.text();
     console.error("Notion create page error:", res.status, text);
     throw new Error(`Failed to create Notion page: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function createPageUnderPage(
+  parentPageId: string,
+  properties: any,
+  children?: any[]
+) {
+  const res = await fetch(`${NOTION_BASE_URL}/pages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version": NOTION_VERSION,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      parent: { page_id: parentPageId },
+      properties,
+      ...(children?.length ? { children } : {}),
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Notion create child page error:", res.status, text);
+    throw new Error(`Failed to create child page in Notion: ${res.status}`);
   }
 
   return res.json();

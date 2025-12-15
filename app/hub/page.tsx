@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadSession } from "@/lib/session";
 import type { TaskMeta } from "./types";
 
@@ -16,6 +16,7 @@ type ScheduleResponse = {
   slots: Slot[];
   cells: string[][];
   scheduleDate?: string;
+  reportTime?: string;
   message?: string;
 };
 
@@ -42,9 +43,27 @@ type TaskComment = {
   author: string;
 };
 
+type AnimalProfile = {
+  id: string;
+  name: string;
+  summary: string;
+  dailyCareNotes?: string;
+  birthday?: string;
+  ageLabel?: string;
+  ageMonths: number | null;
+  milkingMethod?: string;
+  getMilked: boolean;
+  type?: { name: string; color?: string };
+  behaviors: string[];
+  breed?: string;
+  gender?: { name: string; color?: string };
+  photos: { name: string; url: string }[];
+};
+
 type TaskDetails = {
   name: string;
   description: string;
+  extraNotes?: string;
   status: string;
   comments: TaskComment[];
   media: { name: string; url: string; kind: "image" | "video" | "audio" | "file" }[];
@@ -173,6 +192,13 @@ export default function HubSchedulePage() {
   const [commentDraft, setCommentDraft] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
+  const [animals, setAnimals] = useState<AnimalProfile[]>([]);
+  const [animalsLoaded, setAnimalsLoaded] = useState(false);
+  const [animalLoading, setAnimalLoading] = useState(false);
+  const [animalOverlay, setAnimalOverlay] = useState<AnimalProfile | null>(null);
+  const [animalLookupError, setAnimalLookupError] = useState<string | null>(null);
+  const animalFetchInFlight = useRef(false);
+
   const statusColorLookup = useMemo(() => {
     const map: Record<string, string> = {};
     statusOptions.forEach((opt) => {
@@ -180,6 +206,177 @@ export default function HubSchedulePage() {
     });
     return map;
   }, [statusOptions]);
+
+  const scheduleDateLabel = data?.scheduleDate;
+  const scheduleDateObj = useMemo(() => {
+    if (!scheduleDateLabel) return null;
+    const parsed = new Date(scheduleDateLabel);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  }, [scheduleDateLabel]);
+
+  const isScheduleToday = useMemo(() => {
+    if (!scheduleDateObj) return false;
+    const now = new Date();
+    return (
+      now.getFullYear() === scheduleDateObj.getFullYear() &&
+      now.getMonth() === scheduleDateObj.getMonth() &&
+      now.getDate() === scheduleDateObj.getDate()
+    );
+  }, [scheduleDateObj]);
+
+  const scheduleTitle = scheduleDateLabel
+    ? isScheduleToday
+      ? "Todays Schedule"
+      : `${scheduleDateLabel} Schedule`
+    : "Todays Schedule";
+  const scheduleOutdated = Boolean(scheduleDateLabel && !isScheduleToday);
+
+  async function ensureAnimalsLoaded() {
+    if (animalsLoaded || animalFetchInFlight.current) return;
+    animalFetchInFlight.current = true;
+    setAnimalLoading(true);
+    setAnimalLookupError(null);
+    try {
+      const res = await fetch("/api/animals");
+      if (!res.ok) throw new Error("Failed to load animals");
+      const json = await res.json();
+      setAnimals(json.animals || []);
+      setAnimalsLoaded(true);
+    } catch (err) {
+      console.error("Failed to load animals", err);
+      setAnimalLookupError("Could not load animal info right now.");
+    } finally {
+      animalFetchInFlight.current = false;
+      setAnimalLoading(false);
+    }
+  }
+
+  async function handleAnimalReference(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setAnimalLookupError(null);
+    await ensureAnimalsLoaded();
+
+    const found = animals.find(
+      (a) => a.name?.toLowerCase() === trimmed.toLowerCase()
+    );
+
+    if (found) {
+      setAnimalOverlay(found);
+    } else {
+      setAnimalLookupError(`Could not find details for ${trimmed}.`);
+    }
+  }
+
+  function renderTextWithAnimalLinks(text: string): React.ReactNode {
+    if (!text) return "";
+    const parts: React.ReactNode[] = [];
+    const regex = /\[animal:([^\]]+)\]/gi;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    const renderPlain = (plain: string) => {
+      return plain.split("\n").flatMap((segment, idx) => {
+        const nodes: React.ReactNode[] = [];
+        if (idx > 0) {
+          nodes.push(<br key={`br-${lastIndex}-${idx}`} />);
+        }
+        nodes.push(
+          <span key={`plain-${lastIndex}-${idx}`} className="whitespace-pre-wrap">
+            {segment}
+          </span>
+        );
+        return nodes;
+      });
+    };
+
+    while ((match = regex.exec(text)) !== null) {
+      const before = text.slice(lastIndex, match.index);
+      if (before) {
+        parts.push(...renderPlain(before));
+      }
+
+      const animalName = match[1].trim();
+      parts.push(
+        <button
+          key={`animal-${match.index}-${animalName}`}
+          type="button"
+          onClick={() => handleAnimalReference(animalName)}
+          className="inline-flex items-center gap-1 rounded-full border border-[#cfd7b0] bg-[#f6f2de] px-2 py-0.5 text-[12px] font-semibold text-[#2f5ba0] underline underline-offset-2 hover:bg-[#ecf3d4]"
+        >
+          🐾 {animalName}
+        </button>
+      );
+      lastIndex = regex.lastIndex;
+    }
+
+    const after = text.slice(lastIndex);
+    if (after) {
+      parts.push(...renderPlain(after));
+    }
+
+    return parts.length > 0 ? parts : text;
+  }
+
+  function renderCareNotes(notes?: string): React.ReactNode {
+    if (!notes?.trim()) {
+      return <span className="text-sm text-[#6a6748]">No daily care notes yet.</span>;
+    }
+
+    const pieces: React.ReactNode[] = [];
+    const regex = /(https?:\/\/[^\s]+)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let idx = 0;
+
+    while ((match = regex.exec(notes)) !== null) {
+      const before = notes.slice(lastIndex, match.index);
+      if (before) {
+        pieces.push(
+          <span key={`note-text-${idx}`} className="whitespace-pre-wrap text-sm text-[#4b5133]">
+            {before}
+          </span>
+        );
+      }
+
+      const url = match[0];
+      const bareUrl = url.split("?")[0];
+      const isImage = /(\.png|\.jpe?g|\.gif|\.webp|\.avif)$/i.test(bareUrl);
+      pieces.push(
+        isImage ? (
+          <div key={`note-img-${idx}`} className="overflow-hidden rounded-md border border-[#e6dfbe]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="Care note" className="w-full max-h-64 object-cover" />
+          </div>
+        ) : (
+          <a
+            key={`note-link-${idx}`}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[#3f5b23] underline decoration-dotted"
+          >
+            {url}
+          </a>
+        )
+      );
+
+      lastIndex = regex.lastIndex;
+      idx += 1;
+    }
+
+    const trailing = notes.slice(lastIndex);
+    if (trailing) {
+      pieces.push(
+        <span key="note-text-trailing" className="whitespace-pre-wrap text-sm text-[#4b5133]">
+          {trailing}
+        </span>
+      );
+    }
+
+    return <div className="space-y-2">{pieces}</div>;
+  }
 
   const isExternalVolunteer =
     (currentUserType || "").toLowerCase() === "external volunteer";
@@ -670,6 +867,7 @@ export default function HubSchedulePage() {
     const emptyDetails: TaskDetails = {
       name: taskName,
       description: "",
+      extraNotes: "",
       status: "",
       comments: [],
       media: [],
@@ -700,6 +898,7 @@ export default function HubSchedulePage() {
       const detail: TaskDetails = {
         name: json.name || taskName,
         description: json.description || "",
+        extraNotes: json.extraNotes || "",
         status: json.status || "",
         comments: json.comments || [],
         media: json.media || json.photos || [],
@@ -790,6 +989,7 @@ export default function HubSchedulePage() {
       setModalDetails({
         name: taskPayload.task,
         description: "",
+        extraNotes: "",
         status: "",
         comments: [],
         media: [],
@@ -808,6 +1008,8 @@ export default function HubSchedulePage() {
     setModalDetails(null);
     setModalIsMeal(false);
     setCommentDraft("");
+    setAnimalOverlay(null);
+    setAnimalLookupError(null);
   }
 
   // Auto-refresh task details while the modal is open
@@ -826,25 +1028,21 @@ export default function HubSchedulePage() {
   return (
     <>
       <div className="space-y-8">
-        <div className="rounded-lg border border-[#d0c9a4] bg-white/80 px-4 py-3 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5d7f3b]">
-            Schedule date
-          </p>
-          <p className="text-sm text-[#4b5133]">
-            {loading
-              ? "Loading schedule…"
-              : data?.scheduleDate
-              ? `Showing schedule for ${data.scheduleDate}`
-              : "No schedule date is configured in Notion yet."}
-          </p>
-        </div>
-
         {!isOnline && (
           <div className="rounded-lg border border-[#e4dcb8] bg-[#f8f5e6] px-4 py-3 shadow-sm text-sm text-[#6a6748]">
             You&apos;re offline. Showing your most recently saved schedule and task
             details. Updates and comments are disabled until you reconnect.
           </div>
         )}
+
+        {!loading &&
+          data?.message &&
+          !isExternalVolunteer &&
+          !hasStandardScheduleContent && (
+            <div className="rounded-lg border border-[#e4dcb8] bg-white/80 px-4 py-3 text-sm text-[#6a6748]">
+              {data.message}
+            </div>
+          )}
 
         {!isExternalVolunteer && taskTypes.length > 0 && (
           <section className="rounded-lg border border-[#d0c9a4] bg-white/80 px-4 py-3 shadow-sm">
@@ -896,13 +1094,21 @@ export default function HubSchedulePage() {
 
         {showStandardSection && (
           <section className="space-y-3">
-            <h2 className="text-2xl font-semibold tracking-[0.18em] uppercase text-[#5d7f3b]">
-              Todays Schedule
+            <h2 className="text-2xl font-semibold tracking-[0.18em] uppercase text-[#5d7f3b] mb-1">
+              {scheduleTitle}
             </h2>
             <p className="text-sm text-[#7a7f54]">
               Click any task to see its details, description, and who you are
               assigned with.
             </p>
+            {scheduleOutdated && !loading ? (
+              <p className="mt-1 text-xs font-semibold text-red-700">
+                This schedule date is not today. Please confirm timing before starting.
+              </p>
+            ) : null}
+            {data?.message && !loading && (
+              <p className="mt-1 text-xs text-[#7a7f54]">{data.message}</p>
+            )}
 
               <div className="flex flex-wrap gap-2 pt-1">
                 <button
@@ -1282,12 +1488,14 @@ export default function HubSchedulePage() {
 
               <div className="rounded-lg border border-[#e2d7b5] bg-white/70 px-4 py-3 space-y-3">
                 {modalTask.task.includes("\n") && (
-                  <div className="whitespace-pre-line text-[11px] leading-snug text-[#44422f] bg-[#f1edd8] border border-[#dfd6b3] rounded-md px-3 py-2">
-                    {modalTask.task
-                      .split("\n")
-                      .slice(1)
-                      .join("\n")
-                      .trim() || "No additional notes."}
+                  <div className="text-[11px] leading-snug text-[#44422f] bg-[#f1edd8] border border-[#dfd6b3] rounded-md px-3 py-2">
+                    {renderTextWithAnimalLinks(
+                      modalTask.task
+                        .split("\n")
+                        .slice(1)
+                        .join("\n")
+                        .trim() || "No additional notes."
+                    )}
                   </div>
                 )}
 
@@ -1300,15 +1508,39 @@ export default function HubSchedulePage() {
                       Loading task details…
                     </p>
                   ) : modalDetails?.description ? (
-                    <p className="text-[12px] leading-snug text-[#4f4b33]">
-                      {modalDetails.description}
-                    </p>
+                    <div className="text-[12px] leading-snug text-[#4f4b33]">
+                      {renderTextWithAnimalLinks(modalDetails.description)}
+                    </div>
                   ) : (
                     <p className="text-[11px] italic text-[#a19a70]">
-                      No extra description available yet.
+                      No description found for this task.
                     </p>
                   )}
                 </div>
+
+                {showFullTaskDetail && !modalLoading ? (
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a8256]">
+                      Extra notes
+                    </p>
+                    {modalDetails?.extraNotes ? (
+                      <div className="text-[12px] leading-snug text-[#4f4b33]">
+                        {renderTextWithAnimalLinks(modalDetails.extraNotes)}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] italic text-[#a19a70]">
+                        No extra notes shared yet.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
+                {animalLookupError ? (
+                  <p className="text-[11px] text-red-700">{animalLookupError}</p>
+                ) : null}
+                {animalLoading && (
+                  <p className="text-[11px] text-[#7a7f54]">Loading animal details…</p>
+                )}
 
                 {showFullTaskDetail && !modalLoading && modalDetails?.estimatedTime ? (
                   <div className="space-y-1">
@@ -1444,7 +1676,7 @@ export default function HubSchedulePage() {
                         Task Media
                       </p>
                       <p className="text-[11px] text-[#6a6748]">
-                        Existing media for this task.
+                        Uploads are temporarily disabled. Existing media stays visible below.
                       </p>
                     </div>
                   </div>
@@ -1563,6 +1795,103 @@ export default function HubSchedulePage() {
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {animalOverlay && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4 py-6"
+          onClick={() => setAnimalOverlay(null)}
+        >
+          <div
+            className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="grid gap-0 md:grid-cols-[1.1fr_1fr]">
+              <div className="relative min-h-[240px] bg-[#f7f3e2]">
+                {animalOverlay.photos?.length ? (
+                  <div className="absolute inset-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={animalOverlay.photos[0].url}
+                      alt={animalOverlay.photos[0].name || animalOverlay.name}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-6xl text-[#c2b98d]">🐐</div>
+                )}
+                <button
+                  className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1 text-white"
+                  onClick={() => setAnimalOverlay(null)}
+                  type="button"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="space-y-3 bg-white px-5 py-4 text-sm text-[#4b5133]">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Animal spotlight</p>
+                  <h3 className="text-2xl font-semibold text-[#314123]">{animalOverlay.name}</h3>
+                  <p className="text-sm text-[#5f5a3b]">{animalOverlay.summary || "No summary yet."}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Daily care notes</p>
+                  <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
+                    {renderCareNotes(animalOverlay.dailyCareNotes)}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
+                    <p className="font-semibold text-[#3f4926]">Birthday</p>
+                    <p className="text-[#5f5a3b]">
+                      {animalOverlay.birthday
+                        ? new Date(animalOverlay.birthday).toLocaleDateString()
+                        : "Unknown"}
+                    </p>
+                    <p className="text-[#7c7755]">{animalOverlay.ageLabel || "Age not set"}</p>
+                  </div>
+                  <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
+                    <p className="font-semibold text-[#3f4926]">Type</p>
+                    <p className="text-[#5f5a3b]">{animalOverlay.type?.name || "Unspecified"}</p>
+                    {animalOverlay.gender?.name ? (
+                      <p className="text-[#7c7755]">Gender: {animalOverlay.gender.name}</p>
+                    ) : null}
+                  </div>
+                  <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
+                    <p className="font-semibold text-[#3f4926]">Breed</p>
+                    <p className="text-[#5f5a3b]">{animalOverlay.breed || "Unknown"}</p>
+                  </div>
+                  <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
+                    <p className="font-semibold text-[#3f4926]">Milking</p>
+                    <p className="text-[#5f5a3b]">{animalOverlay.milkingMethod || "—"}</p>
+                    <p className="text-[#7c7755]">
+                      {animalOverlay.getMilked ? "Gets milked" : "Does not get milked"}
+                    </p>
+                  </div>
+                </div>
+
+                {animalOverlay.behaviors?.length ? (
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Behaviors</p>
+                    <div className="flex flex-wrap gap-2">
+                      {animalOverlay.behaviors.map((behavior) => (
+                        <span
+                          key={behavior}
+                          className="inline-flex items-center rounded-full bg-[#eef3d9] px-3 py-1 text-[12px] font-semibold text-[#4c5c24]"
+                        >
+                          {behavior}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

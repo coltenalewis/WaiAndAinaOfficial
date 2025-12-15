@@ -124,6 +124,18 @@ type DiceBody = {
   betAmount?: number;
 };
 
+type SlotsBody = {
+  name?: string;
+  betAmount?: number;
+  action?: string;
+};
+
+type PlinkoBody = {
+  name?: string;
+  betAmount?: number;
+  action?: string;
+};
+
 export async function POST(req: Request) {
   if (!USERS_DB_ID) {
     return NextResponse.json(
@@ -132,7 +144,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: RunBody & DiceBody & { action?: string };
+  let body: RunBody & DiceBody & SlotsBody & PlinkoBody & { action?: string };
   try {
     body = await req.json();
   } catch {
@@ -223,6 +235,106 @@ export async function POST(req: Request) {
         win: wins,
         betAmount,
         betType,
+        goatLeaderboard,
+        runLeaderboard,
+      });
+    }
+
+    if (action === "slots") {
+      const betAmount = Math.max(1, Math.floor(Number(body.betAmount || 0)));
+      if (betAmount <= 0) {
+        return NextResponse.json({ error: "Bet must be positive" }, { status: 400 });
+      }
+
+      if (betAmount > currentGoats) {
+        return NextResponse.json({ error: "Not enough goats" }, { status: 400 });
+      }
+
+      const symbols = ["🐐", "🐓", "🐄", "🐑", "🌽", "🥕"];
+      const reels = [0, 0, 0].map(() => Math.floor(Math.random() * symbols.length));
+      const resultSymbols = reels.map((idx) => symbols[idx]);
+
+      let multiplier = 0;
+      const [a, b, c] = resultSymbols;
+
+      if (a === b && b === c) {
+        multiplier = a === "🐐" ? 8 : 5;
+      } else if (a === b || b === c || a === c) {
+        multiplier = 2;
+      } else if (resultSymbols.includes("🐐") && resultSymbols.includes("🌽")) {
+        multiplier = 1.5;
+      }
+
+      const payout = Math.floor(betAmount * multiplier);
+      const wins = payout > 0;
+      const nextGoats = currentGoats - betAmount + payout;
+
+      await updatePage(page.id, {
+        [GOAT_DICE_KEY]: { number: nextGoats },
+      });
+
+      const { goatLeaderboard, runLeaderboard } = await loadStats();
+
+      return NextResponse.json({
+        goats: nextGoats,
+        reels: resultSymbols,
+        payout,
+        win: wins,
+        multiplier,
+        betAmount,
+        goatLeaderboard,
+        runLeaderboard,
+      });
+    }
+
+    if (action === "plinko") {
+      const betAmount = Math.max(1, Math.floor(Number(body.betAmount || 0)));
+      if (betAmount <= 0) {
+        return NextResponse.json({ error: "Bet must be positive" }, { status: 400 });
+      }
+
+      if (betAmount > currentGoats) {
+        return NextResponse.json({ error: "Not enough goats" }, { status: 400 });
+      }
+
+      const buckets: Array<{ label: string; multiplier: number; weight: number }> = [
+        { label: "🌾", multiplier: 0, weight: 24 },
+        { label: "🐐", multiplier: 1, weight: 26 },
+        { label: "🐓", multiplier: 1.5, weight: 14 },
+        { label: "🐑", multiplier: 2, weight: 8 },
+        { label: "🐄", multiplier: 3, weight: 4 },
+        { label: "🧀", multiplier: 5, weight: 1 },
+      ];
+
+      const totalWeight = buckets.reduce((sum, bucket) => sum + bucket.weight, 0);
+      const roll = Math.random() * totalWeight;
+      let acc = 0;
+      let selected = buckets[0];
+      for (const bucket of buckets) {
+        acc += bucket.weight;
+        if (roll <= acc) {
+          selected = bucket;
+          break;
+        }
+      }
+
+      const payout = Math.floor(betAmount * selected.multiplier);
+      const wins = payout > 0;
+      const nextGoats = currentGoats - betAmount + payout;
+
+      await updatePage(page.id, {
+        [GOAT_DICE_KEY]: { number: nextGoats },
+      });
+
+      const { goatLeaderboard, runLeaderboard } = await loadStats();
+
+      return NextResponse.json({
+        goats: nextGoats,
+        bucket: selected.label,
+        multiplier: selected.multiplier,
+        payout,
+        win: wins,
+        betAmount,
         goatLeaderboard,
         runLeaderboard,
       });

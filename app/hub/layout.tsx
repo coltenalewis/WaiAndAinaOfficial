@@ -36,6 +36,11 @@ export default function HubLayout({ children }: { children: ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [newlyOnline, setNewlyOnline] = useState<Record<string, boolean>>({});
 
+  const normalizedType = (userType || "").toLowerCase();
+  const isExternalVolunteer = normalizedType === "external volunteer";
+  const isInactiveVolunteer = normalizedType === "inactive volunteer";
+  const isAdmin = normalizedType === "admin";
+
   useEffect(() => {
     const session = loadSession();
     if (!session || !session.name) {
@@ -46,6 +51,12 @@ export default function HubLayout({ children }: { children: ReactNode }) {
     setUserType(session.userType ?? null);
     setUserTypeColor(session.userTypeColor ?? null);
   }, [router]);
+
+  useEffect(() => {
+    if (isInactiveVolunteer && pathname.startsWith("/hub") && pathname !== "/hub/goat") {
+      router.replace("/hub/goat");
+    }
+  }, [isInactiveVolunteer, pathname, router]);
 
   function isActive(path: string) {
     return pathname === path;
@@ -59,13 +70,14 @@ export default function HubLayout({ children }: { children: ReactNode }) {
     ],
     []
   );
-
-  const normalizedType = (userType || "").toLowerCase();
-  const isExternalVolunteer = normalizedType === "external volunteer";
-
   const canAccessWork = useMemo(() => {
     if (!userType) return false;
-    return ["admin", "volunteer", "external volunteer"].includes(normalizedType);
+    return [
+      "admin",
+      "volunteer",
+      "external volunteer",
+      "inactive volunteer",
+    ].includes(normalizedType);
   }, [normalizedType, userType]);
 
   const workLinks = useMemo(() => {
@@ -76,12 +88,19 @@ export default function HubLayout({ children }: { children: ReactNode }) {
       { href: "/hub/goat", label: "Arcade", icon: "🐐" },
     ];
 
+    if (isAdmin) {
+      links.push({ href: "/hub/admin", label: "Admin", icon: "🛠️" });
+    }
+
     if (isExternalVolunteer) {
       return links.filter((link) => link.href === "/hub");
     }
+    if (isInactiveVolunteer) {
+      return links.filter((link) => link.href === "/hub/goat");
+    }
 
     return links;
-  }, [isExternalVolunteer]);
+  }, [isAdmin, isExternalVolunteer]);
 
   const workLinkHrefs = useMemo(
     () => workLinks.map((link) => link.href),
@@ -141,6 +160,27 @@ export default function HubLayout({ children }: { children: ReactNode }) {
       }
     };
   }, [name]);
+
+  // Auto-generate reports once the configured Hawaii-time clock hits
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        await fetch("/api/reports");
+      } catch (err) {
+        if (!cancelled) console.error("Auto-report check failed", err);
+      }
+    };
+
+    tick();
+    const interval = setInterval(() => tick(), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isAdmin]);
 
   // Poll online roster using heartbeat timestamps
   useEffect(() => {
