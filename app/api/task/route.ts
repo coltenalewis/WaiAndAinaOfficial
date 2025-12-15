@@ -16,6 +16,7 @@ const TASK_PHOTOS_PROPERTY_KEY = "Photos";    // files
 const TASK_TYPE_PROPERTY_KEY = "Task Type";   // select
 const TASK_LINKS_PROPERTY_KEY = "Links";      // rich_text or url
 const TASK_ESTIMATE_PROPERTY_KEY = "Estimated Time"; // rich_text or text
+const TASK_NOTES_PROPERTY_KEY = "Extra Notes"; // rich_text or text
 
 function getPlainText(prop: any): string {
   if (!prop) return "";
@@ -136,6 +137,7 @@ export async function GET(req: Request) {
     const props = page.properties || {};
     const pageName = getPlainText(props[TASK_NAME_PROPERTY_KEY]) || name;
     const description = getPlainText(props[TASK_DESC_PROPERTY_KEY]);
+    const extraNotes = getPlainText(props[TASK_NOTES_PROPERTY_KEY]);
     const status = getPlainText(props[TASK_STATUS_PROPERTY_KEY]);
     const links = parseLinks(props[TASK_LINKS_PROPERTY_KEY]);
     const typeProp = props[TASK_TYPE_PROPERTY_KEY];
@@ -195,6 +197,7 @@ export async function GET(req: Request) {
       taskType,
       media,
       estimatedTime,
+      extraNotes,
       comments,
     });
   } catch (err) {
