@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import {
   createPageInDatabase,
+  createPageUnderPage,
   queryDatabase,
   retrieveComments,
   retrieveDatabase,
+  retrievePage,
 } from "@/lib/notion";
 import { loadScheduleData, Slot } from "@/lib/schedule-loader";
 
@@ -254,9 +256,31 @@ export async function POST() {
     }
   }
 
-  const guideMeta = await retrieveDatabase(REPORTS_DB_ID);
-  const titleKey = getTitlePropertyKey(guideMeta);
-  const dateKey = getDatePropertyKey(guideMeta);
+  let guideMeta: any | null = null;
+  let isDatabase = true;
+  let titleKey = "Name";
+  let dateKey: string | null = null;
+
+  try {
+    guideMeta = await retrieveDatabase(REPORTS_DB_ID);
+    titleKey = getTitlePropertyKey(guideMeta);
+    dateKey = getDatePropertyKey(guideMeta);
+  } catch (err) {
+    console.warn(
+      "Reports parent is not a database, falling back to child page creation:",
+      err
+    );
+    isDatabase = false;
+    try {
+      await retrievePage(REPORTS_DB_ID);
+    } catch (pageErr) {
+      console.error("Reports parent page lookup failed:", pageErr);
+      return NextResponse.json(
+        { error: "Reports parent page is not accessible" },
+        { status: 500 }
+      );
+    }
+  }
   const scheduleLabel = schedule.scheduleDate || new Date().toLocaleDateString();
   const isoDate = toIso(schedule.scheduleDate);
 
@@ -315,24 +339,35 @@ export async function POST() {
     });
   }
 
-  const properties: any = {
-    [titleKey]: {
-      title: [
-        {
-          type: "text",
-          text: { content: `Daily Report — ${scheduleLabel}` },
+  const properties: any = isDatabase
+    ? {
+        [titleKey]: {
+          title: [
+            {
+              type: "text",
+              text: { content: `Daily Report — ${scheduleLabel}` },
+            },
+          ],
         },
-      ],
-    },
-  };
+      }
+    : {
+        title: [
+          {
+            type: "text",
+            text: { content: `Daily Report — ${scheduleLabel}` },
+          },
+        ],
+      };
 
-  if (dateKey) {
+  if (isDatabase && dateKey) {
     properties[dateKey] = {
       date: { start: isoDate },
     };
   }
 
-  const page = await createPageInDatabase(REPORTS_DB_ID, properties, children);
+  const page = isDatabase
+    ? await createPageInDatabase(REPORTS_DB_ID, properties, children)
+    : await createPageUnderPage(REPORTS_DB_ID, properties, children);
 
   return NextResponse.json({ success: true, pageId: page.id });
 }

@@ -101,6 +101,34 @@ export async function createPageInDatabase(
   return res.json();
 }
 
+export async function createPageUnderPage(
+  parentPageId: string,
+  properties: any,
+  children?: any[]
+) {
+  const res = await fetch(`${NOTION_BASE_URL}/pages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version": NOTION_VERSION,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      parent: { page_id: parentPageId },
+      properties,
+      ...(children?.length ? { children } : {}),
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Notion create child page error:", res.status, text);
+    throw new Error(`Failed to create child page in Notion: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export async function retrieveDatabase(databaseId: string) {
   const res = await fetch(`${NOTION_BASE_URL}/databases/${databaseId}`, {
     headers: {
