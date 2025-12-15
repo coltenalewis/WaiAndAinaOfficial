@@ -62,6 +62,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
 
   const normalizedType = (userType || "").toLowerCase();
   const isExternalVolunteer = normalizedType === "external volunteer";
+  const isAdmin = normalizedType === "admin";
 
   const canAccessWork = useMemo(() => {
     if (!userType) return false;
@@ -76,12 +77,16 @@ export default function HubLayout({ children }: { children: ReactNode }) {
       { href: "/hub/goat", label: "Arcade", icon: "🐐" },
     ];
 
+    if (isAdmin) {
+      links.push({ href: "/hub/admin", label: "Admin", icon: "🛠️" });
+    }
+
     if (isExternalVolunteer) {
       return links.filter((link) => link.href === "/hub");
     }
 
     return links;
-  }, [isExternalVolunteer]);
+  }, [isAdmin, isExternalVolunteer]);
 
   const workLinkHrefs = useMemo(
     () => workLinks.map((link) => link.href),

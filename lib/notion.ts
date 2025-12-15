@@ -75,7 +75,8 @@ export async function queryAllDatabasePages(
 
 export async function createPageInDatabase(
   databaseId: string,
-  properties: any
+  properties: any,
+  children?: any[]
 ) {
   const res = await fetch(`${NOTION_BASE_URL}/pages`, {
     method: "POST",
@@ -84,7 +85,11 @@ export async function createPageInDatabase(
       "Notion-Version": NOTION_VERSION,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ parent: { database_id: databaseId }, properties }),
+    body: JSON.stringify({
+      parent: { database_id: databaseId },
+      properties,
+      ...(children?.length ? { children } : {}),
+    }),
   });
 
   if (!res.ok) {

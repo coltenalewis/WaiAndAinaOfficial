@@ -190,9 +190,6 @@ export default function HubSchedulePage() {
   const [modalIsMeal, setModalIsMeal] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [animals, setAnimals] = useState<AnimalProfile[]>([]);
   const [animalsLoaded, setAnimalsLoaded] = useState(false);
@@ -979,47 +976,6 @@ export default function HubSchedulePage() {
     }
   }
 
-  async function uploadTaskMedia(taskName: string) {
-    if (!uploadFile || !isOnline) return;
-    setUploadingMedia(true);
-    setUploadError(null);
-
-    try {
-      const form = new FormData();
-      form.append("name", taskName);
-      form.append("file", uploadFile);
-
-      const res = await fetch("/api/task/media", {
-        method: "POST",
-        body: form,
-      });
-
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json.error || "Upload failed");
-      }
-
-      const json = await res.json();
-      const newMedia = json.media;
-
-      setModalDetails((prev) =>
-        prev
-          ? {
-              ...prev,
-              media: [...(prev.media || []), newMedia],
-            }
-          : prev
-      );
-
-      setUploadFile(null);
-    } catch (err: any) {
-      console.error("Failed to upload media", err);
-      setUploadError(err?.message || "Failed to upload media");
-    } finally {
-      setUploadingMedia(false);
-    }
-  }
-
   // When a task box is clicked
   async function handleTaskClick(taskPayload: TaskClickPayload) {
     setModalTask(taskPayload);
@@ -1051,8 +1007,6 @@ export default function HubSchedulePage() {
     setModalDetails(null);
     setModalIsMeal(false);
     setCommentDraft("");
-    setUploadFile(null);
-    setUploadError(null);
     setAnimalOverlay(null);
     setAnimalLookupError(null);
   }
@@ -1721,45 +1675,9 @@ export default function HubSchedulePage() {
                         Task Media
                       </p>
                       <p className="text-[11px] text-[#6a6748]">
-                        Uploads are added to the task and stored in Drive.
+                        Uploads are temporarily disabled. Existing media stays visible below.
                       </p>
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-2 rounded-md bg-[#f6f1dd] p-3 text-sm text-[#4b5133]">
-                    <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7a7f54]">
-                      Add media
-                    </label>
-                    <input
-                      type="file"
-                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                      disabled={!isOnline}
-                      className="w-full rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-sm text-[#3f3c2d] shadow-inner disabled:opacity-60"
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          modalDetails?.name && uploadTaskMedia(modalDetails.name)
-                        }
-                        disabled={!uploadFile || uploadingMedia || !modalDetails || !isOnline}
-                        className="rounded-md bg-[#a0b764] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f9f9ec] shadow-md hover:bg-[#95ad5e] disabled:opacity-60"
-                      >
-                        {uploadingMedia ? "Uploading…" : "Upload"}
-                      </button>
-                      {uploadFile ? (
-                        <span className="text-[12px] text-[#5f5a3b]">{uploadFile.name}</span>
-                      ) : (
-                        <span className="text-[12px] text-[#7a7f54]">Select a file to upload</span>
-                      )}
-                    </div>
-                    {!isOnline && (
-                      <p className="text-[12px] text-[#b15f2c]">
-                        You are offline. Uploads and edits are disabled.
-                      </p>
-                    )}
-                    {uploadError ? (
-                      <p className="text-[12px] text-[#b33939]">{uploadError}</p>
-                    ) : null}
                   </div>
                   <div className="space-y-2">
                     {modalDetails?.media?.length ? (
@@ -1884,7 +1802,7 @@ export default function HubSchedulePage() {
 
       {animalOverlay && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4 py-6"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4 py-6"
           onClick={() => setAnimalOverlay(null)}
         >
           <div
