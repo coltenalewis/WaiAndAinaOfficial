@@ -319,4 +319,79 @@ export async function PATCH(req: Request) {
     }
 
     if (description !== undefined) {
-      properties[TASK_DESC_PRO]()
+      properties[TASK_DESC_PROPERTY_KEY] = {
+        rich_text: description
+          ? [{ type: "text", text: { content: description } }]
+          : [],
+      };
+    }
+
+    if (taskType !== undefined) {
+      properties[TASK_TYPE_PROPERTY_KEY] = taskType
+        ? { select: { name: taskType } }
+        : { select: null };
+    }
+
+    if (extraNotes !== undefined) {
+      properties[TASK_NOTES_PROPERTY_KEY] = {
+        rich_text: extraNotes
+          ? [{ type: "text", text: { content: extraNotes } }]
+          : [],
+      };
+    }
+
+    if (links !== undefined) {
+      // Store links as rich_text so you can paste multiple lines/commas/etc.
+      properties[TASK_LINKS_PROPERTY_KEY] = {
+        rich_text: links ? [{ type: "text", text: { content: links } }] : [],
+      };
+    }
+
+    if (estimatedTime !== undefined) {
+      properties[TASK_ESTIMATE_PROPERTY_KEY] = {
+        rich_text: estimatedTime
+          ? [{ type: "text", text: { content: estimatedTime } }]
+          : [],
+      };
+    }
+
+    await updatePage(page.id, properties);
+
+    // Return updated task details (useful for your UI)
+    const refreshed = await findTaskPageByName(name);
+    const payload = refreshed ? await buildTaskPayload(refreshed, name) : { success: true };
+
+    return NextResponse.json(payload);
+  } catch (err) {
+    console.error("PATCH /task failed:", err);
+    return NextResponse.json({ error: "Failed to update task" }, { status: 500 });
+  }
+}
+
+// ─────────────────────────────────────────────
+// POST — add a comment to a task
+// ─────────────────────────────────────────────
+export async function POST(req: Request) {
+  if (!TASKS_DB_ID) {
+    return NextResponse.json({ error: "NOTION_TASKS_DATABASE_ID is not set" }, { status: 500 });
+  }
+
+  const body = await req.json().catch(() => null);
+  const { name, comment } = body || {};
+
+  if (!name || !comment) {
+    return NextResponse.json({ error: "Missing task name or comment" }, { status: 400 });
+  }
+
+  try {
+    const page = await findTaskPageByName(name);
+    if (!page) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+
+    await createComment(page.id, [{ type: "text", text: { content: comment } }]);
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("POST /task failed:", err);
+    return NextResponse.json({ error: "Failed to add comment" }, { status: 500 });
+  }
+}
