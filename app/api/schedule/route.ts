@@ -16,6 +16,8 @@ export async function GET() {
   } catch (err) {
     const friendly = "No schedule has been assigned yet.";
     console.error("Failed to fetch schedule from Notion:", err);
+
+    const friendly = "No schedule has been assigned yet.";
     return NextResponse.json(
       {
         people: [],
