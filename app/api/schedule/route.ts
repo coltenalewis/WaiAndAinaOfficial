@@ -14,7 +14,6 @@ export async function GET() {
     const data = await loadScheduleData();
     return NextResponse.json(data);
   } catch (err) {
-    const friendly = "No schedule has been assigned yet.";
     console.error("Failed to fetch schedule from Notion:", err);
 
     const friendly = "No schedule has been assigned yet.";
