@@ -36,6 +36,11 @@ export default function HubLayout({ children }: { children: ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [newlyOnline, setNewlyOnline] = useState<Record<string, boolean>>({});
 
+  const normalizedType = (userType || "").toLowerCase();
+  const isExternalVolunteer = normalizedType === "external volunteer";
+  const isInactiveVolunteer = normalizedType === "inactive volunteer";
+  const isAdmin = normalizedType === "admin";
+
   useEffect(() => {
     const session = loadSession();
     if (!session || !session.name) {
@@ -65,12 +70,6 @@ export default function HubLayout({ children }: { children: ReactNode }) {
     ],
     []
   );
-
-  const normalizedType = (userType || "").toLowerCase();
-  const isExternalVolunteer = normalizedType === "external volunteer";
-  const isInactiveVolunteer = normalizedType === "inactive volunteer";
-  const isAdmin = normalizedType === "admin";
-
   const canAccessWork = useMemo(() => {
     if (!userType) return false;
     return [
