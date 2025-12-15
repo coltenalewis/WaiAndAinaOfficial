@@ -13,6 +13,7 @@ const BEHAVIORS_KEY = "Behaviors";
 const BREED_KEY = "Breed";
 const GENDER_KEY = "Gender";
 const PHOTO_KEY = "Photo";
+const DAILY_CARE_NOTES_KEY = "Daily Care Notes";
 
 function formatAgeInfo(dateString?: string) {
   if (!dateString) return { label: "", months: null as number | null };
@@ -106,6 +107,7 @@ export async function GET() {
       const props = page.properties || {};
       const name = getPlainText(props[NAME_KEY]);
       const summary = getPlainText(props[SUMMARY_KEY]);
+      const dailyCareNotes = getPlainText(props[DAILY_CARE_NOTES_KEY]);
       const birthday = props[BIRTHDAY_KEY]?.date?.start || "";
       const { label: ageLabel, months: ageMonths } = formatAgeInfo(birthday);
       const milkingMethod = getPlainText(props[MILKING_METHOD_KEY]);
@@ -148,6 +150,7 @@ export async function GET() {
         breed,
         gender,
         photos,
+        dailyCareNotes,
       };
     });
 

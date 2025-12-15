@@ -46,6 +46,7 @@ type AnimalProfile = {
   id: string;
   name: string;
   summary: string;
+  dailyCareNotes?: string;
   birthday?: string;
   ageLabel?: string;
   ageMonths: number | null;
@@ -189,6 +190,9 @@ export default function HubSchedulePage() {
   const [modalIsMeal, setModalIsMeal] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [animals, setAnimals] = useState<AnimalProfile[]>([]);
   const [animalsLoaded, setAnimalsLoaded] = useState(false);
@@ -315,6 +319,65 @@ export default function HubSchedulePage() {
     }
 
     return parts.length > 0 ? parts : text;
+  }
+
+  function renderCareNotes(notes?: string): React.ReactNode {
+    if (!notes?.trim()) {
+      return <span className="text-sm text-[#6a6748]">No daily care notes yet.</span>;
+    }
+
+    const pieces: React.ReactNode[] = [];
+    const regex = /(https?:\/\/[^\s]+)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let idx = 0;
+
+    while ((match = regex.exec(notes)) !== null) {
+      const before = notes.slice(lastIndex, match.index);
+      if (before) {
+        pieces.push(
+          <span key={`note-text-${idx}`} className="whitespace-pre-wrap text-sm text-[#4b5133]">
+            {before}
+          </span>
+        );
+      }
+
+      const url = match[0];
+      const bareUrl = url.split("?")[0];
+      const isImage = /(\.png|\.jpe?g|\.gif|\.webp|\.avif)$/i.test(bareUrl);
+      pieces.push(
+        isImage ? (
+          <div key={`note-img-${idx}`} className="overflow-hidden rounded-md border border-[#e6dfbe]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="Care note" className="w-full max-h-64 object-cover" />
+          </div>
+        ) : (
+          <a
+            key={`note-link-${idx}`}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[#3f5b23] underline decoration-dotted"
+          >
+            {url}
+          </a>
+        )
+      );
+
+      lastIndex = regex.lastIndex;
+      idx += 1;
+    }
+
+    const trailing = notes.slice(lastIndex);
+    if (trailing) {
+      pieces.push(
+        <span key="note-text-trailing" className="whitespace-pre-wrap text-sm text-[#4b5133]">
+          {trailing}
+        </span>
+      );
+    }
+
+    return <div className="space-y-2">{pieces}</div>;
   }
 
   const isExternalVolunteer =
@@ -916,6 +979,47 @@ export default function HubSchedulePage() {
     }
   }
 
+  async function uploadTaskMedia(taskName: string) {
+    if (!uploadFile || !isOnline) return;
+    setUploadingMedia(true);
+    setUploadError(null);
+
+    try {
+      const form = new FormData();
+      form.append("name", taskName);
+      form.append("file", uploadFile);
+
+      const res = await fetch("/api/task/media", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Upload failed");
+      }
+
+      const json = await res.json();
+      const newMedia = json.media;
+
+      setModalDetails((prev) =>
+        prev
+          ? {
+              ...prev,
+              media: [...(prev.media || []), newMedia],
+            }
+          : prev
+      );
+
+      setUploadFile(null);
+    } catch (err: any) {
+      console.error("Failed to upload media", err);
+      setUploadError(err?.message || "Failed to upload media");
+    } finally {
+      setUploadingMedia(false);
+    }
+  }
+
   // When a task box is clicked
   async function handleTaskClick(taskPayload: TaskClickPayload) {
     setModalTask(taskPayload);
@@ -947,6 +1051,8 @@ export default function HubSchedulePage() {
     setModalDetails(null);
     setModalIsMeal(false);
     setCommentDraft("");
+    setUploadFile(null);
+    setUploadError(null);
     setAnimalOverlay(null);
     setAnimalLookupError(null);
   }
@@ -1615,9 +1721,45 @@ export default function HubSchedulePage() {
                         Task Media
                       </p>
                       <p className="text-[11px] text-[#6a6748]">
-                        Existing media for this task.
+                        Uploads are added to the task and stored in Drive.
                       </p>
                     </div>
+                  </div>
+                  <div className="flex flex-col gap-2 rounded-md bg-[#f6f1dd] p-3 text-sm text-[#4b5133]">
+                    <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7a7f54]">
+                      Add media
+                    </label>
+                    <input
+                      type="file"
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      disabled={!isOnline}
+                      className="w-full rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-sm text-[#3f3c2d] shadow-inner disabled:opacity-60"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          modalDetails?.name && uploadTaskMedia(modalDetails.name)
+                        }
+                        disabled={!uploadFile || uploadingMedia || !modalDetails || !isOnline}
+                        className="rounded-md bg-[#a0b764] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f9f9ec] shadow-md hover:bg-[#95ad5e] disabled:opacity-60"
+                      >
+                        {uploadingMedia ? "Uploading…" : "Upload"}
+                      </button>
+                      {uploadFile ? (
+                        <span className="text-[12px] text-[#5f5a3b]">{uploadFile.name}</span>
+                      ) : (
+                        <span className="text-[12px] text-[#7a7f54]">Select a file to upload</span>
+                      )}
+                    </div>
+                    {!isOnline && (
+                      <p className="text-[12px] text-[#b15f2c]">
+                        You are offline. Uploads and edits are disabled.
+                      </p>
+                    )}
+                    {uploadError ? (
+                      <p className="text-[12px] text-[#b33939]">{uploadError}</p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     {modalDetails?.media?.length ? (
@@ -1777,6 +1919,13 @@ export default function HubSchedulePage() {
                   <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Animal spotlight</p>
                   <h3 className="text-2xl font-semibold text-[#314123]">{animalOverlay.name}</h3>
                   <p className="text-sm text-[#5f5a3b]">{animalOverlay.summary || "No summary yet."}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Daily care notes</p>
+                  <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
+                    {renderCareNotes(animalOverlay.dailyCareNotes)}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">

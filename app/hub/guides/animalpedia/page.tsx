@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 type Animal = {
   id: string;
   name: string;
   summary: string;
+  dailyCareNotes?: string;
   birthday?: string;
   ageLabel?: string;
   ageMonths: number | null;
@@ -55,6 +55,66 @@ function formatDate(date?: string) {
   return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+function renderCareNotes(notes?: string): ReactNode {
+  if (!notes?.trim()) {
+    return <p className="text-sm text-[#6a6748]">No daily care notes yet.</p>;
+  }
+
+  const pieces: ReactNode[] = [];
+  const regex = /(https?:\/\/[^\s]+)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let idx = 0;
+
+  while ((match = regex.exec(notes)) !== null) {
+    const textPart = notes.slice(lastIndex, match.index);
+    if (textPart) {
+      pieces.push(
+        <span key={`text-${idx}`} className="whitespace-pre-wrap text-sm text-[#4b5133]">
+          {textPart}
+        </span>
+      );
+    }
+
+    const url = match[0];
+    const bareUrl = url.split("?")[0];
+    const isImage = /(\.png|\.jpe?g|\.gif|\.webp|\.avif)$/i.test(bareUrl);
+
+    pieces.push(
+      isImage ? (
+        <div key={`img-${idx}`} className="overflow-hidden rounded-md border border-[#e6dfbe]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="Care note" className="w-full max-h-72 object-cover" />
+        </div>
+      ) : (
+        <a
+          key={`link-${idx}`}
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-[#3f5b23] underline decoration-dotted"
+        >
+          {url}
+        </a>
+      )
+    );
+
+    lastIndex = regex.lastIndex;
+    idx += 1;
+  }
+
+  const trailing = notes.slice(lastIndex);
+  if (trailing) {
+    pieces.push(
+      <span key="text-final" className="whitespace-pre-wrap text-sm text-[#4b5133]">
+        {trailing}
+      </span>
+    );
+  }
+
+  return <div className="space-y-2">{pieces}</div>;
+}
+
 export default function AnimalpediaPage() {
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [filters, setFilters] = useState<Filters>({ types: [], genders: [] });
@@ -63,6 +123,7 @@ export default function AnimalpediaPage() {
 
   const [selectedType, setSelectedType] = useState("");
   const [selectedGender, setSelectedGender] = useState("");
+  const [search, setSearch] = useState("");
   const [onlyMilked, setOnlyMilked] = useState(false);
   const [minAge, setMinAge] = useState<string>("");
   const [maxAge, setMaxAge] = useState<string>("");
@@ -109,9 +170,31 @@ export default function AnimalpediaPage() {
         if (ageMonths > maxYears * 12) return false;
       }
 
+      const haystack = [
+        animal.name,
+        animal.summary,
+        animal.type?.name,
+        animal.dailyCareNotes,
+        animal.behaviors.join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      if (search.trim() && !haystack.includes(search.trim().toLowerCase())) {
+        return false;
+      }
+
       return true;
     });
-  }, [animals, selectedType, selectedGender, onlyMilked, minAge, maxAge]);
+  }, [
+    animals,
+    selectedType,
+    selectedGender,
+    onlyMilked,
+    minAge,
+    maxAge,
+    search,
+  ]);
 
   const handleOpen = (animal: Animal) => {
     setActiveAnimal(animal);
@@ -140,17 +223,21 @@ export default function AnimalpediaPage() {
             <h1 className="text-3xl font-semibold">Animalpedia</h1>
             <p className="text-sm text-white/85">Browse care notes, favorites, and quick facts for every animal.</p>
           </div>
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1">
-              <span className="h-2 w-2 rounded-full bg-lime-200 shadow"></span>
-              Updated live from Notion
-            </span>
-          </div>
         </div>
       </header>
 
       <div className="rounded-xl border border-[#d0c9a4] bg-white/80 shadow-sm">
-        <div className="grid gap-3 border-b border-[#e7e0c0] p-4 sm:grid-cols-3">
+        <div className="grid gap-3 border-b border-[#e7e0c0] p-4 sm:grid-cols-3 lg:grid-cols-4">
+          <label className="flex flex-col gap-1 text-sm text-[#4b522d]">
+            <span className="text-[11px] uppercase tracking-[0.18em] text-[#7a7f54]">Search</span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or notes"
+              className="rounded-lg border border-[#cfd7b0] bg-white px-3 py-2 text-sm text-[#3d4425] shadow-sm focus:border-[#8fae4c] focus:outline-none"
+            />
+          </label>
           <label className="flex flex-col gap-1 text-sm text-[#4b522d]">
             <span className="text-[11px] uppercase tracking-[0.18em] text-[#7a7f54]">Animal type</span>
             <select
@@ -240,12 +327,11 @@ export default function AnimalpediaPage() {
                 >
                   <div className="relative h-20 w-28 overflow-hidden rounded-lg border border-[#e6dfbe] bg-[#f8f4e3]">
                     {photo ? (
-                      <Image
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
                         src={photo.url}
                         alt={photo.name || animal.name}
-                        fill
-                        sizes="160px"
-                        className="object-cover"
+                        className="h-full w-full object-cover"
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-2xl">🐾</div>
@@ -299,12 +385,11 @@ export default function AnimalpediaPage() {
               <div className="relative min-h-[260px] bg-[#f7f3e2]">
                 {activeAnimal.photos.length > 0 ? (
                   <div className="relative h-full w-full">
-                    <Image
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={activeAnimal.photos[photoIndex]?.url || activeAnimal.photos[0].url}
                       alt={activeAnimal.photos[photoIndex]?.name || activeAnimal.name}
-                      fill
-                      className="object-cover"
-                      sizes="600px"
+                      className="h-full w-full object-cover"
                     />
                     {activeAnimal.photos.length > 1 ? (
                       <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-3">
@@ -333,6 +418,13 @@ export default function AnimalpediaPage() {
                   <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Animal</p>
                   <h2 className="text-2xl font-semibold text-[#314123]">{activeAnimal.name}</h2>
                   <p className="text-sm text-[#5f5a3b]">{activeAnimal.summary || "No summary yet."}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Daily care notes</p>
+                  <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
+                    {renderCareNotes(activeAnimal.dailyCareNotes)}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
