@@ -584,21 +584,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ status: "exists" });
   }
 
-  const scheduleHSTTime = formatHawaiiTime(schedule.reportTime);
-  if (!scheduleHSTTime) {
-    return NextResponse.json({ status: "no-auto-time" });
-  }
-
-  const nowHST = new Date().toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Pacific/Honolulu",
-  });
-
-  if (nowHST < scheduleHSTTime) {
-    return NextResponse.json({ status: "pending", nextRun: scheduleHSTTime });
-  }
 
   try {
     const page = await createReportFromSchedule(schedule);
