@@ -14,6 +14,8 @@ type ScheduleResponse = {
   slots: { id: string; label: string; timeRange?: string; isMeal?: boolean }[];
   cells: string[][];
   scheduleDate?: string;
+  reportTime?: string;
+  taskResetTime?: string;
   message?: string;
 };
 type TaskCatalogItem = {
@@ -52,7 +54,8 @@ function splitCellTasks(cell: string) {
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean)
-    .map((t) => (note ? `${t}\n${note}` : t));
+    .map((t) => (note ? `${t}\n${note}` : t))
+    .filter((t) => taskBaseName(t) && taskBaseName(t) !== "-");
 }
 
 function taskBaseName(task: string): string {
