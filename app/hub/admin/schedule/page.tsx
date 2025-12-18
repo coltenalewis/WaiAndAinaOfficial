@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loadSession } from "@/lib/session";
+import { HubAssistantChat } from "@/components/HubAssistantChat";
 
 type Slot = { id: string; label: string; timeRange?: string; isMeal?: boolean };
 type ScheduleResponse = {
@@ -30,7 +31,6 @@ type DragPayload = {
   fromIndex?: number;
 };
 type CellContent = { tasks: string[]; note: string };
-type ChatMessage = { role: "user" | "assistant"; content: string; status?: "thinking" };
 
 const DRAG_DATA_TYPE = "application/json/task";
 
@@ -98,14 +98,6 @@ export default function AdminScheduleEditorPage() {
   const [pendingCells, setPendingCells] = useState<Set<string>>(new Set());
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null);
   const [taskDetailLoading, setTaskDetailLoading] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      role: "assistant",
-      content: "Hi! I can help you massage schedules, juggle tasks, or explain what belongs where.",
-    },
-  ]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
   const [dockPosition, setDockPosition] = useState({ x: 24, y: 140 });
   const [isDraggingDock, setIsDraggingDock] = useState(false);
   const dockOffsetRef = useRef({ x: 0, y: 0 });
@@ -204,9 +196,10 @@ export default function AdminScheduleEditorPage() {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || "Failed to save schedule update");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setMessage(err?.message || "Unable to save this drop. Please retry.");
+      const friendly = err instanceof Error ? err.message : "Unable to save this drop. Please retry.";
+      setMessage(friendly);
     } finally {
       setPendingCells((prev) => {
         const next = new Set(prev);
@@ -335,9 +328,10 @@ export default function AdminScheduleEditorPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load task details");
       setTaskDetail({ name: json.name || base, description: json.description || "", taskType: json.taskType });
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setMessage(err?.message || "Unable to load that task right now.");
+      const friendly = err instanceof Error ? err.message : "Unable to load that task right now.";
+      setMessage(friendly);
       setTaskDetail(null);
     } finally {
       setTaskDetailLoading(false);
@@ -355,40 +349,6 @@ export default function AdminScheduleEditorPage() {
     } catch (err) {
       console.error("Refresh failed", err);
       setMessage("Unable to refresh schedule. Try again soon.");
-    }
-  };
-
-  const handleChatSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const trimmed = chatInput.trim();
-    if (!trimmed) return;
-    const nextMessages = [...chatMessages, { role: "user", content: trimmed }, { role: "assistant", content: "", status: "thinking" }];
-    setChatMessages(nextMessages);
-    setChatInput("");
-    setChatLoading(true);
-
-    try {
-      const res = await fetch("/api/admin-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages.filter((m) => m.role !== "assistant" || !m.status) }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Chat request failed");
-      setChatMessages((prev) => {
-        const clone = [...prev];
-        clone[clone.length - 1] = { role: "assistant", content: json.reply || "I couldn’t find an answer, but I’m here!" };
-        return clone;
-      });
-    } catch (err: any) {
-      console.error(err);
-      setChatMessages((prev) => {
-        const clone = [...prev];
-        clone[clone.length - 1] = { role: "assistant", content: err?.message || "The assistant is busy. Try again." };
-        return clone;
-      });
-    } finally {
-      setChatLoading(false);
     }
   };
 
@@ -451,7 +411,7 @@ export default function AdminScheduleEditorPage() {
           <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#6a6c4d]">
             <li>Drop between tasks to reorder within the same shift.</li>
             <li>Use the floating task dock to assign from anywhere.</li>
-            <li>The side chat uses a lightweight GPT-3.5 assistant.</li>
+            <li>Use the AI assistant chip (bottom-right) to ask about guides, databases, and schedules.</li>
           </ul>
         </div>
       </div>
@@ -782,48 +742,14 @@ export default function AdminScheduleEditorPage() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-[#314123]">AI side chat</h3>
-              <span className="text-[11px] text-[#6b6d4b]">Powered by GPT-3.5</span>
-            </div>
-            <div className="mt-3 max-h-[320px] space-y-2 overflow-y-auto pr-1 text-sm">
-              {chatMessages.map((msg, idx) => (
-                <div
-                  key={`${msg.role}-${idx}`}
-                  className={`flex flex-col gap-1 rounded-lg border px-3 py-2 shadow-sm ${
-                    msg.role === "user"
-                      ? "border-[#c4d48c] bg-[#f4f8e6] text-[#394628]"
-                      : "border-[#d0c9a4] bg-white text-[#3f4630]"
-                  }`}
-                >
-                  <span className="text-[10px] uppercase tracking-[0.1em] text-[#7a7f54]">{msg.role}</span>
-                  <p className="whitespace-pre-line">{msg.content || "Thinking…"}</p>
-                  {msg.status === "thinking" && (
-                    <div className="flex items-center gap-1 text-[11px] text-[#7a7f54]">
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-[#8fae4c]" />
-                      <span>Thinking…</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <form onSubmit={handleChatSubmit} className="mt-3 space-y-2">
-              <textarea
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                className="min-h-[70px] w-full rounded-md border border-[#d0c9a4] px-3 py-2 text-sm focus:border-[#8fae4c] focus:outline-none"
-                placeholder="Ask for a schedule cleanup, task ideas, or sequencing help"
-              />
-              <button
-                type="submit"
-                disabled={chatLoading}
-                className="w-full rounded-md bg-[#8fae4c] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#f9f9ec] shadow-md transition hover:bg-[#7e9c44] disabled:opacity-60"
-              >
-                {chatLoading ? "Thinking…" : "Send"}
-              </button>
-            </form>
-          </div>
+          <HubAssistantChat
+            variant="panel"
+            storageKey="admin-schedule-assistant"
+            title="AI schedule copilot"
+            subtitle="Use across the admin hub, with clickable references"
+            placeholder="Ask for schedule cleanup, where a guide lives, or which database holds something"
+            contextHint="Admin schedule workspace: help with shift changes, guide references, and Notion databases used across the hub."
+          />
 
           {taskDetail && (
             <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-4 shadow-sm">

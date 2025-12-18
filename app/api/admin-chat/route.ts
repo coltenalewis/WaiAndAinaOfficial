@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
+import { DATABASE_REGISTRY, HUB_REFERENCE_LINKS } from "@/lib/databaseRegistry";
+
+type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const messages = (body?.messages || []) as { role: string; content: string }[];
+    const context = typeof body?.context === "string" ? body.context : "";
+    const incoming = Array.isArray(body?.messages) ? (body.messages as ChatMessage[]) : [];
+
+    const messages: ChatMessage[] = incoming
+      .filter((msg) => Boolean(msg?.content))
+      .map((msg) => ({
+        role: msg.role === "assistant" ? "assistant" : "user",
+        content: msg.content,
+      }));
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -11,6 +22,17 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    const registrySummary = DATABASE_REGISTRY.map(
+      (db) =>
+        `- ${db.name}: ${db.purpose} (env: ${db.envVar}; endpoints: ${(db.endpoints || []).join(
+          ", "
+        )}; surfaces: ${(db.surfaces || []).join(", ")})`
+    ).join("\n");
+
+    const referenceLinks = HUB_REFERENCE_LINKS.map(
+      (ref) => `- ${ref.label}: ${ref.href}${ref.description ? ` — ${ref.description}` : ""}`
+    ).join("\n");
 
     const completion = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -25,7 +47,18 @@ export async function POST(req: Request) {
           {
             role: "system",
             content:
-              "You are an upbeat scheduling copilot for farm admins. Be concise, propose clear next steps, and keep responses under 120 words.",
+              [
+                "You are an upbeat work-hub copilot for farm admins and volunteers.",
+                "Ground your answers in the hub's data and link readers directly to helpful pages using Markdown links; links render as highlighted chips.",
+                "Keep responses under 140 words, propose clear next steps, and prioritize concise bullet points.",
+                "Known databases:",
+                registrySummary,
+                "Reference links you can cite (use Markdown links):",
+                referenceLinks,
+                context ? `User context: ${context}` : "",
+              ]
+                .filter(Boolean)
+                .join("\n"),
           },
           ...messages.map((m) => ({ role: m.role, content: m.content })),
         ],
