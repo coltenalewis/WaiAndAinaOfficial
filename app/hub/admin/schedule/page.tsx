@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loadSession } from "@/lib/session";
-import { HubAssistantChat } from "@/components/HubAssistantChat";
 
 type Slot = { id: string; label: string; timeRange?: string; isMeal?: boolean };
 type ScheduleResponse = {
@@ -80,6 +79,52 @@ function safeIndex(length: number, index?: number) {
   return Math.min(Math.max(index, 0), length);
 }
 
+async function loadImageElement(file: File): Promise<HTMLImageElement> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+async function compressImageFile(file: File, maxBytes = 500 * 1024) {
+  if (file.size <= maxBytes) return file;
+  const img = await loadImageElement(file);
+  const scale = Math.min(1, Math.sqrt(maxBytes / file.size));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(img.width * scale));
+  canvas.height = Math.max(1, Math.round(img.height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return file;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  let quality = 0.9;
+  let blob: Blob | null = null;
+  while (quality > 0.2) {
+    blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/jpeg", quality)
+    );
+    if (blob && blob.size <= maxBytes) break;
+    quality -= 0.1;
+  }
+
+  if (!blob) return file;
+  if (blob.size > maxBytes) {
+    // Last resort: accept the compressed blob even if slightly over the limit
+    return new File([blob], `compressed-${file.name}`, { type: "image/jpeg" });
+  }
+
+  return new File([blob], `compressed-${file.name}`, { type: "image/jpeg" });
+}
+
 export default function AdminScheduleEditorPage() {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
@@ -98,9 +143,9 @@ export default function AdminScheduleEditorPage() {
   const [pendingCells, setPendingCells] = useState<Set<string>>(new Set());
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null);
   const [taskDetailLoading, setTaskDetailLoading] = useState(false);
-  const [dockPosition, setDockPosition] = useState({ x: 24, y: 140 });
-  const [isDraggingDock, setIsDraggingDock] = useState(false);
-  const dockOffsetRef = useRef({ x: 0, y: 0 });
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const session = loadSession();
@@ -151,7 +196,7 @@ export default function AdminScheduleEditorPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setDockPosition((prev) => ({ x: Math.max(12, window.innerWidth - 420), y: prev.y }));
+    // no-op placeholder to avoid hydration mismatch if future window sizing is needed
   }, []);
 
   const filteredTaskBank = useMemo(() => {
@@ -283,6 +328,8 @@ export default function AdminScheduleEditorPage() {
   const handleDropEvent = useCallback(
     (e: React.DragEvent, person: string, slot: Slot, targetIndex?: number) => {
       e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
       const jsonPayload = e.dataTransfer.getData(DRAG_DATA_TYPE);
       const textPayload = e.dataTransfer.getData("text/task-name");
       let parsed: DragPayload = { taskName: textPayload };
@@ -297,8 +344,19 @@ export default function AdminScheduleEditorPage() {
 
       if (!parsed.taskName) return;
       handleTaskMove(parsed, { person, slotId: slot.id, slotLabel: slot.label, targetIndex });
+      setPendingInsert(null);
     },
     [handleTaskMove]
+  );
+
+  const handleDragOverEvent = useCallback(
+    (e: React.DragEvent, person: string, slotId: string, index: number) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = draggingTask?.fromPerson ? "move" : "copy";
+      setPendingInsert({ person, slotId, index });
+    },
+    [draggingTask]
   );
 
   const getCellValue = (cell: { person: string; slotId: string } | null) => {
@@ -352,26 +410,44 @@ export default function AdminScheduleEditorPage() {
     }
   };
 
-  useEffect(() => {
-    if (!isDraggingDock) return undefined;
+  const handlePhotoUpload = async () => {
+    if (!taskDetail?.name) {
+      setPhotoMessage("Select a task before uploading a photo.");
+      return;
+    }
+    const file = photoInputRef.current?.files?.[0];
+    if (!file) {
+      setPhotoMessage("Choose an image to upload.");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setPhotoMessage("Only image files are supported.");
+      return;
+    }
 
-    const handleMove = (event: PointerEvent) => {
-      const x = event.clientX - dockOffsetRef.current.x;
-      const y = event.clientY - dockOffsetRef.current.y;
-      const maxX = typeof window !== "undefined" ? window.innerWidth - 260 : x;
-      const maxY = typeof window !== "undefined" ? window.innerHeight - 100 : y;
-      setDockPosition({ x: Math.max(8, Math.min(x, maxX)), y: Math.max(8, Math.min(y, maxY)) });
-    };
+    setPhotoUploading(true);
+    setPhotoMessage(null);
+    try {
+      const compressed = await compressImageFile(file);
+      const form = new FormData();
+      form.append("taskName", taskDetail.name);
+      form.append("file", compressed);
 
-    const handleUp = () => setIsDraggingDock(false);
+      const res = await fetch("/api/task/photos", { method: "POST", body: form });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Upload failed");
 
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [isDraggingDock]);
+      setPhotoMessage("Photo uploaded to Notion Photos.");
+      photoInputRef.current && (photoInputRef.current.value = "");
+      await loadTaskDetail(taskDetail.name);
+    } catch (err) {
+      console.error(err);
+      const friendly = err instanceof Error ? err.message : "Upload failed";
+      setPhotoMessage(friendly);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
 
   if (!authorized) {
     return (
@@ -410,7 +486,7 @@ export default function AdminScheduleEditorPage() {
           <p className="font-semibold">Quick tips</p>
           <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#6a6c4d]">
             <li>Drop between tasks to reorder within the same shift.</li>
-            <li>Use the floating task dock to assign from anywhere.</li>
+            <li>Use the always-visible task dock to assign from anywhere.</li>
             <li>Use the AI assistant chip (bottom-right) to ask about guides, databases, and schedules.</li>
           </ul>
         </div>
@@ -439,7 +515,7 @@ export default function AdminScheduleEditorPage() {
             </div>
           </div>
 
-          <div className="mt-3 overflow-auto rounded-xl border border-[#e2d7b5] bg-[#faf7eb] shadow-inner">
+          <div className="mt-3 max-h-[70vh] min-h-[50vh] overflow-auto rounded-xl border border-[#e2d7b5] bg-[#faf7eb] shadow-inner">
             <table className="min-w-full border-collapse text-sm">
               <thead className="bg-[#e5e7c5]">
                 <tr>
@@ -483,9 +559,13 @@ export default function AdminScheduleEditorPage() {
                       const dropLine = (index: number) => (
                         <div
                           key={`${person}-${slot.id}-drop-${index}`}
-                          onDragOver={(e) => {
+                          onDragOver={(e) => handleDragOverEvent(e, person, slot.id, index)}
+                          onDragEnter={(e) => handleDragOverEvent(e, person, slot.id, index)}
+                          onDragLeave={(e) => {
                             e.preventDefault();
-                            setPendingInsert({ person, slotId: slot.id, index });
+                            if (pendingInsert?.person === person && pendingInsert.slotId === slot.id && pendingInsert.index === index) {
+                              setPendingInsert(null);
+                            }
                           }}
                           onDrop={(e) => handleDropEvent(e, person, slot, index)}
                           className={`h-2 rounded-full transition-all duration-150 ${
@@ -503,6 +583,22 @@ export default function AdminScheduleEditorPage() {
                             isSelected ? "bg-[#f0f4de]" : ""
                           } ${saving ? "animate-pulse" : ""}`}
                           onClick={() => setSelectedCell({ person, slotId: slot.id, slotLabel: slot.label })}
+                          onDragOver={(e) => handleDragOverEvent(e, person, slot.id, content.tasks.length)}
+                          onDragEnter={(e) => handleDragOverEvent(e, person, slot.id, content.tasks.length)}
+                          onDragLeave={(e) => {
+                            e.preventDefault();
+                            if (pendingInsert?.person === person && pendingInsert.slotId === slot.id) {
+                              setPendingInsert(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            const targetIndex =
+                              pendingInsert?.person === person && pendingInsert?.slotId === slot.id
+                                ? pendingInsert.index
+                                : content.tasks.length;
+                            handleDropEvent(e, person, slot, targetIndex);
+                            setPendingInsert(null);
+                          }}
                         >
                           <div className="flex h-full w-full flex-col gap-2">
                             {dropLine(0)}
@@ -561,10 +657,8 @@ export default function AdminScheduleEditorPage() {
 
                             {!content.tasks.length && (
                               <div
-                                onDragOver={(e) => {
-                                  e.preventDefault();
-                                  setPendingInsert({ person, slotId: slot.id, index: 0 });
-                                }}
+                                onDragOver={(e) => handleDragOverEvent(e, person, slot.id, 0)}
+                                onDragEnter={(e) => handleDragOverEvent(e, person, slot.id, 0)}
                                 onDrop={(e) => handleDropEvent(e, person, slot, 0)}
                                 className="flex min-h-[68px] items-center justify-center rounded-md border border-dashed border-[#d0c9a4] bg-white/60 text-[11px] italic text-[#7a7f54]"
                               >
@@ -594,25 +688,15 @@ export default function AdminScheduleEditorPage() {
 
         <div className="relative space-y-4">
           <div
-            className="fixed z-30 w-[320px] max-w-full rounded-2xl border border-[#d0c9a4] bg-white/90 shadow-lg backdrop-blur"
-            style={{ left: dockPosition.x, top: dockPosition.y }}
+            className="sticky top-4 z-20 w-full max-w-[360px] rounded-2xl border border-[#d0c9a4] bg-white/90 shadow-lg backdrop-blur"
           >
             <div
-              className="flex cursor-grab items-center justify-between gap-2 rounded-t-2xl bg-[#f0f4de] px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#4b5133]"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                setIsDraggingDock(true);
-                dockOffsetRef.current = { x: e.clientX - dockPosition.x, y: e.clientY - dockPosition.y };
-              }}
+              className="flex items-center justify-between gap-2 rounded-t-2xl bg-[#f0f4de] px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#4b5133]"
             >
               <span>Task dock</span>
-              <button
-                type="button"
-                onClick={() => setDockPosition({ x: Math.max(12, typeof window !== "undefined" ? window.innerWidth - 420 : 24), y: 140 })}
-                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-[2px] text-[10px] font-semibold text-[#4b5133] hover:bg-[#f6f1dd]"
-              >
-                Reset
-              </button>
+              <span className="rounded-md border border-[#d0c9a4] bg-white px-2 py-[2px] text-[10px] font-semibold text-[#4b5133]">
+                Always visible
+              </span>
             </div>
             <div className="space-y-2 p-3 text-sm">
               <div className="grid gap-2 md:grid-cols-2">
@@ -742,15 +826,6 @@ export default function AdminScheduleEditorPage() {
             )}
           </div>
 
-          <HubAssistantChat
-            variant="panel"
-            storageKey="admin-schedule-assistant"
-            title="AI schedule copilot"
-            subtitle="Use across the admin hub, with clickable references"
-            placeholder="Ask for schedule cleanup, where a guide lives, or which database holds something"
-            contextHint="Admin schedule workspace: help with shift changes, guide references, and Notion databases used across the hub."
-          />
-
           {taskDetail && (
             <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-4 shadow-sm">
               <div className="flex items-center justify-between">
@@ -768,6 +843,33 @@ export default function AdminScheduleEditorPage() {
                   {taskDetail.taskType.name}
                 </span>
               )}
+              <div className="mt-3 space-y-2 rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">Attach photo (500kb max)</p>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="w-full rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-sm focus:border-[#8fae4c] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handlePhotoUpload}
+                  disabled={photoUploading}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[#8fae4c] px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#f9f9ec] shadow-sm transition hover:bg-[#7e9c44] disabled:opacity-60"
+                >
+                  {photoUploading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                      Uploading…
+                    </span>
+                  ) : (
+                    "Upload photo"
+                  )}
+                </button>
+                {photoMessage && (
+                  <p className="text-[12px] text-[#4b5133]">{photoMessage}</p>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -50,6 +50,8 @@ export async function POST(req: Request) {
               [
                 "You are an upbeat work-hub copilot for farm admins and volunteers.",
                 "Ground your answers in the hub's data and link readers directly to helpful pages using Markdown links; links render as highlighted chips.",
+                "Always include direct Markdown links to relevant hub pages or guides when possible.",
+                "Consult the AI Guide (admin-only) as an internal rulebook; never quote restricted instructions to non-admins—summarize guidance and cite public guides instead.",
                 "Keep responses under 140 words, propose clear next steps, and prioritize concise bullet points.",
                 "Known databases:",
                 registrySummary,
