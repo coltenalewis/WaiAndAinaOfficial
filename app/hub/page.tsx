@@ -1327,6 +1327,7 @@ async function handleTaskClick(taskPayload: TaskClickPayload) {
               onTaskClick={handleTaskClick}
               taskMetaMap={taskMetaMap}
               statusColors={statusColorLookup}
+              currentUserName={currentUserName}
             />
           )}
 
@@ -1341,6 +1342,7 @@ async function handleTaskClick(taskPayload: TaskClickPayload) {
               onTaskClick={handleTaskClick}
               taskMetaMap={taskMetaMap}
               statusColors={statusColorLookup}
+              currentUserName={currentUserName}
             />
           )}
 
@@ -1955,6 +1957,7 @@ function ShiftBoard({
   onTaskClick,
   taskMetaMap,
   statusColors,
+  currentUserName,
 }: {
   title: string;
   description: string;
@@ -1962,8 +1965,10 @@ function ShiftBoard({
   onTaskClick?: (payload: TaskClickPayload) => void;
   taskMetaMap: Record<string, TaskMeta>;
   statusColors: Record<string, string>;
+  currentUserName?: string | null;
 }) {
   const hasTasks = combined.some((cell) => cell.tasks.length > 0);
+  const normalizedUser = (currentUserName || "").toLowerCase().trim();
 
   return (
     <section className="space-y-3">
@@ -2024,6 +2029,9 @@ function ShiftBoard({
                     const participants =
                       task.people.length > 0 ? task.people : cell.names;
                     const primaryPerson = participants[0] || "Team";
+                    const includesUser = normalizedUser
+                      ? participants.some((p) => p.toLowerCase() === normalizedUser)
+                      : false;
                     const meta = taskMetaMap[taskBaseName(task.task)];
                     const status = meta?.status;
                     const typeClass = typeColorClasses(meta?.typeColor);
@@ -2040,17 +2048,42 @@ function ShiftBoard({
                             groupNames: participants,
                           })
                         }
-                        className={`w-full rounded-md border px-3 py-2 text-left shadow-sm transition hover:shadow ${typeClass}`}
+                        className={`w-full rounded-md border px-3 py-2 text-left shadow-sm transition hover:shadow ${typeClass} ${
+                          includesUser ? "ring-2 ring-[#d2e4a0]" : ""
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="font-semibold text-[#42502d]">
                               {task.task}
                             </div>
-                            <div className="text-[11px] text-[#7a7f54]">
-                              {participants.length
-                                ? participants.join(", ")
-                                : "No names yet"}
+                            <div className="text-[11px] text-[#7a7f54] space-y-1">
+                              <div className="flex flex-wrap gap-1">
+                                {participants.length
+                                  ? participants.map((p) => {
+                                      const isMe =
+                                        normalizedUser &&
+                                        p.toLowerCase() === normalizedUser;
+                                      return (
+                                        <span
+                                          key={p}
+                                          className={`rounded-full px-2 py-[2px] text-[11px] font-semibold ${
+                                            isMe
+                                              ? "bg-[#a0b764] text-white"
+                                              : "bg-[#eef2d9] text-[#3f4b29]"
+                                          }`}
+                                        >
+                                          {isMe ? `${p} (you)` : p}
+                                        </span>
+                                      );
+                                    })
+                                  : "No names yet"}
+                              </div>
+                              {includesUser && (
+                                <span className="inline-flex items-center rounded-full bg-[#f1edd8] px-2 py-[1px] text-[10px] font-semibold text-[#4f4b33]">
+                                  You&apos;re on this task
+                                </span>
+                              )}
                             </div>
                           </div>
                           <StatusBadge
@@ -2072,6 +2105,36 @@ function ShiftBoard({
         <p className="text-sm text-[#7a7f54] italic">
           No tasks listed for this shift yet.
         </p>
+      )}
+
+      {normalizedUser && (
+        <div className="rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] px-3 py-2 text-[12px] text-[#4f4b33]">
+          {(() => {
+            const userTasks = combined
+              .map((cell) => ({
+                slot: cell.slot,
+                tasks: cell.tasks.filter((t) =>
+                  t.people.some((p) => p.toLowerCase() === normalizedUser)
+                ),
+              }))
+              .filter((entry) => entry.tasks.length > 0);
+
+            if (!userTasks.length) {
+              return "You have no assignments in this shift.";
+            }
+
+            return (
+              <ul className="list-disc space-y-1 pl-4">
+                {userTasks.map((entry) => (
+                  <li key={entry.slot.id}>
+                    <span className="font-semibold">{entry.slot.label}</span>:{" "}
+                    {entry.tasks.map((t) => taskBaseName(t.task)).join(", ")}
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+        </div>
       )}
     </section>
   );
@@ -2424,7 +2487,7 @@ function ScheduleGrid({
     <table className="w-full min-w-[720px] border-collapse text-xs">
       <thead>
         <tr className="bg-[#e5e7c5]">
-          <th className="border border-[#d1d4aa] px-3 py-2 text-left w-40 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5d7f3b]">
+          <th className="border border-[#d1d4aa] px-3 py-2 text-left w-40 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5d7f3b] sticky left-0 z-20 bg-[#e5e7c5]">
             Person
           </th>
           {workSlots.map((slot) => {
@@ -2472,7 +2535,7 @@ function ScheduleGrid({
                 visualRow % 2 === 0 ? "bg-[#faf8ea]" : "bg-[#f4f2df]"
               }
             >
-              <td className="border border-[#d1d4aa] px-3 py-2 align-top">
+              <td className="border border-[#d1d4aa] px-3 py-2 align-top sticky left-0 z-10 bg-[#f7f6e8]">
                 <span
                   className={
                     "text-sm " +
