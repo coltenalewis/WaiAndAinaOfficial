@@ -16,6 +16,7 @@ type ScheduleResponse = {
   people: string[];
   slots: Slot[];
   cells: string[][];
+  reportFlags?: boolean[];
   scheduleDate?: string;
   reportTime?: string;
   taskResetTime?: string;
@@ -249,73 +250,15 @@ export default function WorkDashboardPage() {
           Use the shortcuts below to jump between schedules, requests, guides, and games. The quick toggles above the page also let you swap views instantly.
         </p>
       </div>
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            <Link
-              href="/hub"
-              className="group md:col-span-2 rounded-3xl border border-[#c8c49c] bg-gradient-to-br from-[#fefcf3] via-[#f7f4e6] to-[#e8eccd] p-6 shadow-md hover:-translate-y-0.5 transition"
-            >
-              <div className="flex items-center gap-4">
-                <span className="text-3xl">📆</span>
-                <div className="flex flex-col">
-                  <span className="text-2xl font-semibold text-[#3b4224]">Open schedule</span>
-                  <span className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Main workspace</span>
-                </div>
+      <div className="space-y-4">
+        <div className="rounded-3xl border border-[#c8c49c] bg-gradient-to-br from-[#fefcf3] via-[#f7f4e6] to-[#e8eccd] p-6 shadow-md">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <span className="text-3xl">📆</span>
+              <div className="flex flex-col">
+                <span className="text-2xl font-semibold text-[#3b4224]">Open schedule</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Main workspace</span>
               </div>
-              <p className="mt-3 text-sm text-[#4b5133] leading-relaxed">
-                View shifts, tasks, and live updates with status changes, notes, and comments.
-              </p>
-              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#5d7f3b] underline underline-offset-4">
-                Go to Schedule →
-              </span>
-            </Link>
-            {quickLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="group rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm hover:-translate-y-0.5 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{link.icon}</span>
-                  <div className="flex flex-col">
-                    <span className="text-lg font-semibold text-[#3b4224]">{link.title}</span>
-                    <span className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Open {link.title}</span>
-                  </div>
-                </div>
-                <p className="mt-3 text-sm text-[#4b5133] leading-relaxed">{link.description}</p>
-                <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#5d7f3b] underline underline-offset-4">
-                  Go to {link.title} →
-                </span>
-              </Link>
-            ))}
-          </div>
-
-          {alerts.length > 0 && (
-            <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-lg font-semibold text-[#3b4224]">Schedule updates</h3>
-                <span className="text-[11px] uppercase tracking-[0.12em] text-[#7a7f54]">
-                  Since last visit
-                </span>
-              </div>
-              <ul className="mt-3 space-y-2 text-sm text-[#4b5133]">
-                {alerts.map((alert, idx) => (
-                  <li key={`${alert}-${idx}`} className="flex items-start gap-2">
-                    <span className="mt-1 h-2 w-2 rounded-full bg-[#8fae4c]" />
-                    <span>{alert}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-[#d0c9a4] bg-white/85 p-5 shadow-sm h-full flex flex-col">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-[#7a7f54]">Today&apos;s schedule</p>
-              <h3 className="text-lg font-semibold text-[#3b4224]">Just you</h3>
             </div>
             <Link
               href="/hub"
@@ -324,9 +267,10 @@ export default function WorkDashboardPage() {
               View full schedule
             </Link>
           </div>
-          <p className="mt-2 text-sm text-[#4b5133] leading-relaxed">
-            Your personal view of today&apos;s schedule. Only your assigned tasks appear here.
+          <p className="mt-3 text-sm text-[#4b5133] leading-relaxed">
+            View shifts, tasks, and live updates with status changes, notes, and comments. Your personal schedule preview lives right below.
           </p>
+
           <div className="mt-4 overflow-auto rounded-xl border border-[#e2dbc0] bg-[#f7f4e6] shadow-inner">
             {miniLoading && (
               <p className="p-4 text-sm text-[#7a7f54]">Refreshing your schedule…</p>
@@ -401,6 +345,47 @@ export default function WorkDashboardPage() {
             )}
           </div>
         </div>
+
+        <div className="grid md:grid-cols-3 gap-4">
+          {quickLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="group rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm hover:-translate-y-0.5 transition"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{link.icon}</span>
+                <div className="flex flex-col">
+                  <span className="text-lg font-semibold text-[#3b4224]">{link.title}</span>
+                  <span className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Open {link.title}</span>
+                </div>
+              </div>
+              <p className="mt-3 text-sm text-[#4b5133] leading-relaxed">{link.description}</p>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#5d7f3b] underline underline-offset-4">
+                Go to {link.title} →
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        {alerts.length > 0 && (
+          <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-[#3b4224]">Schedule updates</h3>
+              <span className="text-[11px] uppercase tracking-[0.12em] text-[#7a7f54]">
+                Since last visit
+              </span>
+            </div>
+            <ul className="mt-3 space-y-2 text-sm text-[#4b5133]">
+              {alerts.map((alert, idx) => (
+                <li key={`${alert}-${idx}`} className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-[#8fae4c]" />
+                  <span>{alert}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
