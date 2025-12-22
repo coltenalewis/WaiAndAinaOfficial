@@ -12,7 +12,11 @@ export async function GET() {
 
   try {
     const data = await loadScheduleData();
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
   } catch (err) {
     console.error("Failed to fetch schedule from Notion:", err);
 
@@ -24,7 +28,12 @@ export async function GET() {
         cells: [],
         message: friendly,
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
     );
   }
 }
