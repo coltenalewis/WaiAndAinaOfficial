@@ -574,7 +574,7 @@ export default function HubSchedulePage() {
       setError(null);
 
       try {
-        const res = await fetch("/api/schedule");
+        const res = await fetch("/api/schedule", { cache: "no-store" });
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }

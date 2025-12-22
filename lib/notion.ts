@@ -14,6 +14,7 @@ export async function retrievePage(pageId: string) {
       Authorization: `Bearer ${NOTION_TOKEN}`,
       "Notion-Version": NOTION_VERSION,
     },
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -34,6 +35,7 @@ export async function queryDatabase(databaseId: string, body: any = {}) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -90,6 +92,7 @@ export async function createPageInDatabase(
       properties,
       ...(children?.length ? { children } : {}),
     }),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -118,6 +121,7 @@ export async function createPageUnderPage(
       properties,
       ...(children?.length ? { children } : {}),
     }),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -135,6 +139,7 @@ export async function retrieveDatabase(databaseId: string) {
       Authorization: `Bearer ${NOTION_TOKEN}`,
       "Notion-Version": NOTION_VERSION,
     },
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -155,6 +160,7 @@ export async function updatePage(pageId: string, properties: any) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ properties }),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -174,6 +180,7 @@ export async function retrieveComments(blockId: string) {
         Authorization: `Bearer ${NOTION_TOKEN}`,
         "Notion-Version": NOTION_VERSION,
       },
+      cache: "no-store",
     }
   );
 
@@ -195,6 +202,7 @@ export async function createComment(blockId: string, richText: any[]) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ parent: { block_id: blockId }, rich_text: richText }),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -219,6 +227,7 @@ export async function listBlockChildren(
         Authorization: `Bearer ${NOTION_TOKEN}`,
         "Notion-Version": NOTION_VERSION,
       },
+      cache: "no-store",
     }
   );
 

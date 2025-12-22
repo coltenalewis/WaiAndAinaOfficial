@@ -105,7 +105,7 @@ export default function WorkDashboardPage() {
     async function loadMiniSchedule() {
       setMiniLoading(true);
       try {
-        const res = await fetch("/api/schedule");
+        const res = await fetch("/api/schedule", { cache: "no-store" });
         if (!res.ok) return;
         const data: ScheduleResponse = await res.json();
         const rowIndex = data.people.findIndex(
