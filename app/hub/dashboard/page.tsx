@@ -139,6 +139,8 @@ export default function WorkDashboardPage() {
               slot: slot.label,
               timeRange: slot.timeRange,
               task: entry,
+              status: "",
+              commentCount: 0,
             });
           });
         });
