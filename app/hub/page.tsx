@@ -2326,6 +2326,41 @@ function ShiftBoard({
 }) {
   const normalizedUser = (currentUserName || "").toLowerCase().trim();
   const hasTasks = combined.some((cell) => cell.tasks.length > 0);
+  const personMap = new Map<
+    string,
+    { name: string; tasks: { task: string; people: string[]; slot: Slot }[] }
+  >();
+  const ensurePersonEntry = (person: string) => {
+    const trimmed = person.trim();
+    if (!trimmed) return null;
+    const key = trimmed.toLowerCase();
+    if (!personMap.has(key)) {
+      personMap.set(key, { name: trimmed, tasks: [] });
+    }
+    return personMap.get(key) || null;
+  };
+
+  combined.forEach((cell) => {
+    cell.names.forEach((person) => {
+      ensurePersonEntry(person);
+    });
+
+    cell.tasks.forEach((task) => {
+      task.people.forEach((person) => {
+        const entry = ensurePersonEntry(person);
+        if (!entry) return;
+        entry.tasks.push({
+          task: task.task,
+          people: task.people,
+          slot: cell.slot,
+        });
+      });
+    });
+  });
+
+  const personEntries = Array.from(personMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
 
   return (
     <section className="space-y-3">
