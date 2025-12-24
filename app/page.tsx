@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { clearSession, loadSession, saveSession, UserSession } from "@/lib/session";
+import {
+  clearSession,
+  getHubLandingPath,
+  loadSession,
+  saveSession,
+  UserSession,
+} from "@/lib/session";
 
 const allowedWorkTypes = ["admin", "volunteer", "external volunteer"];
 const DEFAULT_PASSCODE = "WAIANDAINA";
@@ -43,6 +49,17 @@ export default function HomePage() {
     if (!session?.userType) return false;
     return allowedWorkTypes.includes(session.userType.toLowerCase());
   }, [session?.userType]);
+  const shouldAutoRouteToSchedule = useMemo(() => {
+    if (!session?.userType) return false;
+    return ["admin", "volunteer", "external volunteer"].includes(
+      session.userType.toLowerCase()
+    );
+  }, [session?.userType]);
+
+  useEffect(() => {
+    if (!shouldAutoRouteToSchedule) return;
+    router.replace("/hub");
+  }, [router, shouldAutoRouteToSchedule]);
 
   function handleLogout() {
     clearSession();
@@ -127,7 +144,7 @@ export default function HomePage() {
       saveSession(nextSession);
       setSession(formatSession(nextSession));
       setShowLogin(false);
-      router.push("/hub/dashboard");
+      router.push(getHubLandingPath(data.userType));
     } catch (err) {
       console.error("Login error:", err);
       setLoginError("Something went wrong. Please try again.");
