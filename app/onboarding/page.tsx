@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getHubLandingPath, saveSession, UserSession } from "@/lib/session";
@@ -18,20 +18,13 @@ function OnboardingContent() {
   const searchParams = useSearchParams();
 
   const [selectedName, setSelectedName] = useState<string>("");
-  const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [capabilityOptions, setCapabilityOptions] = useState<string[]>([]);
-  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
-  const [capabilityError, setCapabilityError] = useState<string | null>(null);
-  const [capabilityLoading, setCapabilityLoading] = useState(false);
-  const lastFetchedName = useRef<string>("");
 
   const presetName = searchParams.get("name") || "";
-  const capabilitiesOnly = searchParams.get("capabilities") === "1";
   const isNameLocked = !!presetName;
   useEffect(() => {
     if (presetName) {
@@ -39,47 +32,11 @@ function OnboardingContent() {
     }
   }, [presetName]);
 
-  async function loadCapabilities(nameValue: string) {
-    setCapabilityLoading(true);
-    setCapabilityError(null);
-    try {
-      const search = nameValue ? `?name=${encodeURIComponent(nameValue)}` : "";
-      const res = await fetch(`/api/user-settings${search}`);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const json = await res.json();
-      setCapabilityOptions(json.capabilityOptions || []);
-      if (Array.isArray(json.capabilities)) {
-        setSelectedCapabilities(json.capabilities);
-      }
-      lastFetchedName.current = nameValue;
-    } catch (err) {
-      console.error("Failed to load capabilities", err);
-      setCapabilityError("Unable to load capabilities right now.");
-    } finally {
-      setCapabilityLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadCapabilities(presetName || "");
-  }, [presetName]);
-
-  useEffect(() => {
-    const trimmed = selectedName.trim();
-    if (!trimmed || trimmed === lastFetchedName.current) return;
-    loadCapabilities(trimmed);
-  }, [selectedName]);
-
   const canSubmit = useMemo(() => {
     const nameValue = selectedName.trim();
     if (!nameValue || submitting) return false;
-    if (capabilitiesOnly) {
-      return currentPass.trim().length > 0;
-    }
     return newPass.trim().length >= 4 && newPass === confirmPass;
-  }, [capabilitiesOnly, confirmPass, currentPass, newPass, selectedName, submitting]);
+  }, [confirmPass, newPass, selectedName, submitting]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,9 +54,8 @@ function OnboardingContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: nameValue,
-          currentPassword: capabilitiesOnly ? currentPass : DEFAULT_PASSCODE,
-          newPassword: capabilitiesOnly ? null : newPass,
-          capabilities: selectedCapabilities,
+          currentPassword: DEFAULT_PASSCODE,
+          newPassword: newPass,
         }),
       });
 
@@ -110,18 +66,14 @@ function OnboardingContent() {
         return;
       }
 
-      setSuccess(
-        capabilitiesOnly
-          ? "Capabilities updated! Taking you to the dashboard…"
-          : "Passcode updated! Signing you in…"
-      );
+      setSuccess("Passcode updated! Signing you in…");
 
       const loginRes = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: nameValue,
-          password: capabilitiesOnly ? currentPass : newPass,
+          password: newPass,
         }),
       });
 
@@ -146,14 +98,6 @@ function OnboardingContent() {
     }
   }
 
-  function toggleCapability(capability: string) {
-    setSelectedCapabilities((prev) =>
-      prev.includes(capability)
-        ? prev.filter((c) => c !== capability)
-        : [...prev, capability]
-    );
-  }
-
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f6f2e6] via-[#f1edd8] to-[#e8e1c7] text-[#3b4224]">
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
@@ -165,20 +109,18 @@ function OnboardingContent() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-[#33401e]">
-                {capabilitiesOnly ? "Select your capabilities" : "Set your new passcode"}
+                Set your new passcode
               </h1>
               <p className="text-sm text-[#5a5f3b]">
-                {capabilitiesOnly
-                  ? "Choose the areas you can help with so we can match you to the right tasks."
-                  : `Use your starter code (${DEFAULT_PASSCODE}) once, then pick a secure passcode to unlock the Work Dashboard and future onboarding resources.`}
+                {`Use your starter code (${DEFAULT_PASSCODE}) once, then pick a secure passcode to unlock the Work Dashboard and future onboarding resources.`}
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#556036]">
               <span className="rounded-full bg-[#a0b764] px-3 py-1 text-white shadow">
-                {capabilitiesOnly ? "Step 2" : "Step 1"}
+                Step 1
               </span>
               <span className="rounded-full border border-[#d0c9a4] bg-white px-3 py-1 text-[#5d7f3b] shadow-sm">
-                {capabilitiesOnly ? "Capabilities" : "Credentials"}
+                Credentials
               </span>
               <span className="rounded-full border border-[#d0c9a4] bg-white px-3 py-1 text-[#5d7f3b] shadow-sm">
                 Guides (soon)
@@ -205,7 +147,7 @@ function OnboardingContent() {
                   value={selectedName}
                   onChange={(e) => !isNameLocked && setSelectedName(e.target.value)}
                   disabled={isNameLocked}
-                  placeholder="Type your name exactly as it appears in Notion"
+                  placeholder="Type your name exactly as it appears in the roster"
                   className="w-full rounded-md border border-[#c8cba0] bg-white px-4 py-3 text-sm font-medium text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c] disabled:cursor-not-allowed disabled:bg-[#f7f3df]"
                 />
                 {isNameLocked ? (
@@ -214,110 +156,40 @@ function OnboardingContent() {
                   </p>
                 ) : (
                   <p className="text-[11px] text-[#7a7f54]">
-                    {capabilitiesOnly
-                      ? "Enter your name to update your capabilities. New users should contact an admin for access."
-                      : "Enter your own name to update your passcode. New users should contact an admin for access."}
+                    Enter your own name to update your passcode. New users should contact an admin for access.
                   </p>
                 )}
               </div>
 
-              {capabilitiesOnly ? (
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6b6f4c]">
-                    Current passcode
+                    New passcode
                   </label>
                   <input
                     type="password"
-                    value={currentPass}
-                    onChange={(e) => setCurrentPass(e.target.value)}
+                    value={newPass}
+                    onChange={(e) => setNewPass(e.target.value)}
                     className="w-full rounded-md border border-[#c8cba0] bg-[#f1edd8] px-3 py-2 text-sm text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
-                    placeholder="Enter your current passcode"
+                    placeholder="Create a passcode"
                   />
-                  <p className="text-[11px] text-[#7a7f54]">
-                    We&apos;ll keep your existing passcode and only update your capabilities.
-                  </p>
+                  <p className="text-[11px] text-[#7a7f54]">At least 4 characters.</p>
                 </div>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6b6f4c]">
-                      New passcode
-                    </label>
-                    <input
-                      type="password"
-                      value={newPass}
-                      onChange={(e) => setNewPass(e.target.value)}
-                      className="w-full rounded-md border border-[#c8cba0] bg-[#f1edd8] px-3 py-2 text-sm text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
-                      placeholder="Create a passcode"
-                    />
-                    <p className="text-[11px] text-[#7a7f54]">At least 4 characters.</p>
-                  </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6b6f4c]">
-                      Confirm passcode
-                    </label>
-                    <input
-                      type="password"
-                      value={confirmPass}
-                      onChange={(e) => setConfirmPass(e.target.value)}
-                      className="w-full rounded-md border border-[#c8cba0] bg-[#f1edd8] px-3 py-2 text-sm text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
-                      placeholder="Re-enter passcode"
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6b6f4c]">
+                    Confirm passcode
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPass}
+                    onChange={(e) => setConfirmPass(e.target.value)}
+                    className="w-full rounded-md border border-[#c8cba0] bg-[#f1edd8] px-3 py-2 text-sm text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c]"
+                    placeholder="Re-enter passcode"
+                  />
                 </div>
-              )}
-
-              <div className="space-y-2 rounded-lg border border-[#e2d7b5] bg-[#f9f6e7] px-4 py-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6b6f4c]">
-                      Capabilities
-                    </p>
-                    <p className="text-[12px] text-[#6f754f]">
-                      Choose everything you can confidently help with. You can edit this anytime in Settings.
-                    </p>
-                  </div>
-                  {capabilityLoading && (
-                    <span className="text-[11px] text-[#7a7f54]">Loading…</span>
-                  )}
-                </div>
-                {capabilityError && (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
-                    {capabilityError}
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {capabilityOptions.length === 0 && !capabilityLoading ? (
-                    <span className="text-[11px] text-[#7a7f54] italic">
-                      No capabilities available yet.
-                    </span>
-                  ) : (
-                    capabilityOptions.map((cap) => {
-                      const active = selectedCapabilities.includes(cap);
-                      return (
-                        <button
-                          key={cap}
-                          type="button"
-                          onClick={() => toggleCapability(cap)}
-                          className={`rounded-full border px-3 py-1 text-[12px] font-semibold shadow-sm transition ${
-                            active
-                              ? "border-[#8fae4c] bg-[#a0b764] text-white"
-                              : "border-[#d0c9a4] bg-white text-[#4f5730] hover:bg-[#f1edd8]"
-                          }`}
-                        >
-                          {cap}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-                {selectedCapabilities.length > 0 && (
-                  <p className="text-[11px] text-[#6b6f4c]">
-                    Selected: {selectedCapabilities.join(", ")}
-                  </p>
-                )}
               </div>
+
 
               {error && (
                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>

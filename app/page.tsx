@@ -29,13 +29,13 @@ export default function HomePage() {
   const [showLogin, setShowLogin] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // Users from Notion (names only)
-  const [users, setUsers] = useState<string[]>([]);
+  const [users, setUsers] = useState<{ name: string; number: string }[]>([]);
   const [usersLoading, setUsersLoading] = useState<boolean>(true);
   const [usersError, setUsersError] = useState<string | null>(null);
 
   // Selected user + login form
   const [selectedName, setSelectedName] = useState<string>("");
+  const [number, setNumber] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,15 +78,16 @@ export default function HomePage() {
           throw new Error(`HTTP ${res.status}`);
         }
         const data = await res.json();
-        const names = Array.isArray(data.users)
+        const parsed = Array.isArray(data.users)
           ? data.users
-              .map((entry: any) =>
-                typeof entry === "string" ? entry : entry?.name
-              )
-              .filter(Boolean)
+              .map((entry: any) => ({
+                name: entry?.name ?? "",
+                number: entry?.number ?? "",
+              }))
+              .filter((entry: any) => entry.name)
           : [];
 
-        setUsers(names);
+        setUsers(parsed);
       } catch (err) {
         console.error("Failed to load users:", err);
         setUsersError("Unable to load users. Please refresh or try again later.");
@@ -100,8 +101,8 @@ export default function HomePage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedName || !password) {
-      setLoginError("Please choose your name and enter a passcode.");
+    if ((!selectedName && !number) || !password) {
+      setLoginError("Please choose your name or enter your number, then enter a passcode.");
       return;
     }
 
@@ -111,9 +112,20 @@ export default function HomePage() {
     try {
       const normalizedPass = password.trim();
       if (normalizedPass.toUpperCase() === DEFAULT_PASSCODE) {
+        const onboardingName =
+          selectedName ||
+          users.find((user) => user.number === number.trim())?.name ||
+          "";
+
+        if (!onboardingName) {
+          setLoginError("We couldn't match that number to a user.");
+          setIsSubmitting(false);
+          return;
+        }
+
         setShowLogin(false);
         setIsSubmitting(false);
-        router.push(`/onboarding?name=${encodeURIComponent(selectedName)}`);
+        router.push(`/onboarding?name=${encodeURIComponent(onboardingName)}`);
         return;
       }
 
@@ -121,7 +133,8 @@ export default function HomePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: selectedName,
+          name: selectedName || undefined,
+          number: number || undefined,
           password,
         }),
       });
@@ -137,7 +150,7 @@ export default function HomePage() {
 
       const data = await res.json();
       const nextSession: UserSession = {
-        name: selectedName,
+        name: data.name || selectedName,
         userType: data.userType || null,
         userTypeColor: data.userTypeColor || null,
       };
@@ -544,14 +557,27 @@ export default function HomePage() {
                   {!usersLoading && !usersError && users.length > 0 && (
                     <>
                       <option value="">Choose an option...</option>
-                      {users.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
+                      {users.map((user) => (
+                        <option key={user.name} value={user.name}>
+                          {user.name}
                         </option>
                       ))}
                     </>
                   )}
                 </select>
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="number" className="text-sm font-semibold text-[#4f5730]">
+                  Or enter your number
+                </label>
+                <input
+                  id="number"
+                  value={number}
+                  onChange={(e) => setNumber(e.target.value)}
+                  className="w-full rounded-md border border-[#c8cba0] bg-white px-4 py-3 text-sm font-medium text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c]"
+                  placeholder="Phone or member number"
+                />
               </div>
 
               <div className="space-y-1">
@@ -566,7 +592,7 @@ export default function HomePage() {
                   className="w-full rounded-md border border-[#c8cba0] bg-[#f1edd8] px-3 py-2 text-sm text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c]"
                   placeholder="Enter your passcode"
                 />
-                <p className="text-[11px] text-[#7a7f54]">Your passcode is set in the Wai &amp; Aina guest list.</p>
+                <p className="text-[11px] text-[#7a7f54]">Your passcode is set by a site admin.</p>
               </div>
 
               {loginError && (

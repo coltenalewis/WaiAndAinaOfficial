@@ -736,7 +736,7 @@ export default function AdminScheduleEditorPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Upload failed");
 
-      setPhotoMessage("Photo uploaded to Notion Photos.");
+      setPhotoMessage("Photo uploaded.");
       if (photoInputRef.current) {
         photoInputRef.current.value = "";
       }

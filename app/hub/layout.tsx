@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { clearSession, loadSession } from "@/lib/session";
 import { HubAssistantChat } from "@/components/HubAssistantChat";
 
-function notionColorToClasses(color?: string | null) {
+function labelColorToClasses(color?: string | null) {
   const map: Record<string, string> = {
     default: "bg-slate-100 text-slate-800 border-slate-200",
     gray: "bg-slate-100 text-slate-800 border-slate-200",
@@ -416,7 +416,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
                 </span>
                 {userType && (
                   <span
-                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-[2px] text-[10px] font-semibold uppercase tracking-[0.14em] ${notionColorToClasses(
+                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-[2px] text-[10px] font-semibold uppercase tracking-[0.14em] ${labelColorToClasses(
                       userTypeColor
                     )}`}
                   >
@@ -441,7 +441,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
               </span>
               {userType && (
                 <span
-                  className={`inline-flex items-center gap-1 self-start rounded-full border px-2 py-[2px] text-[9px] font-semibold tracking-[0.14em] text-[#2f2f21] ${notionColorToClasses(
+                  className={`inline-flex items-center gap-1 self-start rounded-full border px-2 py-[2px] text-[9px] font-semibold tracking-[0.14em] text-[#2f2f21] ${labelColorToClasses(
                     userTypeColor
                   )}`}
                 >
