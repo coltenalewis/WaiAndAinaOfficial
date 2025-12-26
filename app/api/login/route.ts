@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseRequest } from "@/lib/supabase";
 
+const DEFAULT_PASSCODE = "WAIANDAINA";
+
 export async function POST(req: Request) {
   let body: { name?: string; password?: string };
   try {
@@ -61,6 +63,7 @@ export async function POST(req: Request) {
       name: user.display_name,
       userType: user.user_role?.name ?? null,
       userTypeColor: null,
+      requiresOnboarding: user.passcode === DEFAULT_PASSCODE,
     });
   } catch (err) {
     console.error("Login check failed:", err);
