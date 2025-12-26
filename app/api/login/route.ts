@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const normalizedNumber = number?.trim() ?? "";
 
     const queryFilter = normalizedName
-      ? { display_name: `eq.${normalizedName}` }
+      ? { display_name: `ilike.${normalizedName}` }
       : { phone_number: `eq.${normalizedNumber}` };
 
     const data = await supabaseRequest<any[]>("users", {

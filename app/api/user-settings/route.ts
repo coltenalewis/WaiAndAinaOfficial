@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
   try {
     const data = await supabaseRequest<any[]>("users", {
-      query: { select: "id,display_name", display_name: `eq.${name}`, limit: 1 },
+      query: { select: "id,display_name", display_name: `ilike.${name}`, limit: 1 },
     });
 
     return NextResponse.json({
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     const targetPass = currentPassword.trim();
 
     const data = await supabaseRequest<any[]>("users", {
-      query: { select: "id,passcode", display_name: `eq.${targetName}`, limit: 1 },
+      query: { select: "id,passcode", display_name: `ilike.${targetName}`, limit: 1 },
     });
 
     const user = data?.[0];
