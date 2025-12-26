@@ -93,43 +93,38 @@ async function upsertScheduleCell(params: {
   tasks: string[];
   note: string | null;
 }) {
-  try {
+  const existing = await supabaseRequest<ScheduleCellRow[]>("schedule_cells", {
+    query: {
+      select: "id",
+      schedule_id: `eq.${params.scheduleId}`,
+      person_id: `eq.${params.personId}`,
+      shift_id: `eq.${params.slotId}`,
+      limit: 1,
+    },
+  });
+
+  if (existing.length) {
     await supabaseRequest("schedule_cells", {
-      method: "POST",
-      prefer: "resolution=merge-duplicates,return=representation",
-      query: {
-        on_conflict: "schedule_id,person_id,shift_id",
-      },
+      method: "PATCH",
+      query: { id: `eq.${existing[0].id}` },
       body: {
-        schedule_id: params.scheduleId,
-        person_id: params.personId,
-        shift_id: params.slotId,
         tasks: params.tasks,
         note: params.note,
       },
     });
     return;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "";
-    if (
-      message.includes("ON CONFLICT") &&
-      message.includes("constraint") &&
-      message.includes("matching")
-    ) {
-      await supabaseRequest("schedule_cells", {
-        method: "POST",
-        body: {
-          schedule_id: params.scheduleId,
-          person_id: params.personId,
-          shift_id: params.slotId,
-          tasks: params.tasks,
-          note: params.note,
-        },
-      });
-      return;
-    }
-    throw err;
   }
+
+  await supabaseRequest("schedule_cells", {
+    method: "POST",
+    body: {
+      schedule_id: params.scheduleId,
+      person_id: params.personId,
+      shift_id: params.slotId,
+      tasks: params.tasks,
+      note: params.note,
+    },
+  });
 }
 
 export async function POST(req: Request) {
