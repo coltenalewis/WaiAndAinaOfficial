@@ -20,6 +20,7 @@ type TaskItem = {
   occurrence_date?: string | null;
   person_count?: number | null;
   links?: string[] | null;
+  comments?: string[] | null;
   photos?: string[] | null;
   time_slots?: string[] | null;
   extra_notes?: string[] | null;
@@ -66,6 +67,7 @@ export default function TaskEditorPage() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [applyTo, setApplyTo] = useState<"single" | "future" | "all">("single");
+  const [futureFromDate, setFutureFromDate] = useState("");
   const [editing, setEditing] = useState<TaskItem | null>(null);
   const [draft, setDraft] = useState<TaskItem>({
     id: "",
@@ -82,6 +84,7 @@ export default function TaskEditorPage() {
     occurrence_date: "",
     person_count: null,
     links: [],
+    comments: [],
     photos: [],
     time_slots: [],
     extra_notes: [],
@@ -89,6 +92,7 @@ export default function TaskEditorPage() {
   });
 
   const [typeEditor, setTypeEditor] = useState({ name: "", color: "default" });
+  const [taskTypeOpen, setTaskTypeOpen] = useState(false);
 
   useEffect(() => {
     const session = loadSession();
@@ -169,6 +173,7 @@ export default function TaskEditorPage() {
         occurrence_date: "",
         person_count: null,
         links: [],
+        comments: [],
         photos: [],
         time_slots: [],
         extra_notes: [],
@@ -176,6 +181,7 @@ export default function TaskEditorPage() {
       });
     }
     setApplyTo("single");
+    setFutureFromDate("");
     setEditorOpen(true);
   }
 
@@ -202,6 +208,7 @@ export default function TaskEditorPage() {
       occurrence_date: draft.occurrence_date || null,
       person_count: draft.person_count ?? null,
       links: draft.links || [],
+      comments: draft.comments || [],
       photos: draft.photos || [],
       time_slots: draft.time_slots || [],
       extra_notes: draft.extra_notes || [],
@@ -215,7 +222,7 @@ export default function TaskEditorPage() {
           body: JSON.stringify({
             id: editing.id,
             applyTo,
-            occurrenceDate: editing.occurrence_date,
+            occurrenceDate: futureFromDate || editing.occurrence_date,
             ...payload,
           }),
         });
@@ -299,7 +306,7 @@ export default function TaskEditorPage() {
         {message && <p className="mt-3 text-sm font-semibold text-[#4b5133]">{message}</p>}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+      <div className="space-y-4">
         <div className="rounded-2xl border border-[#d0c9a4] bg-white/70 p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-[#314123]">Filters</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -384,58 +391,205 @@ export default function TaskEditorPage() {
             {loading ? (
               <p className="text-sm text-[#7a7f54]">Loading tasks…</p>
             ) : (
-              <div className="space-y-2">
-                {filteredTasks.map((task) => (
-                  <button
-                    key={task.id}
-                    type="button"
-                    onClick={() => openEditor(task)}
-                    className="w-full rounded-lg border border-[#e2d7b5] bg-white/80 px-4 py-3 text-left shadow-sm transition hover:bg-[#f7f3df]"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-sm font-semibold text-[#314123]">{task.name}</h3>
-                        <p className="text-[11px] text-[#6b6d4b]">
-                          {task.task_type?.name || "Unassigned"} · {task.status} · {task.priority}
-                        </p>
+              <div className="overflow-x-auto">
+                <div className="min-w-[960px] space-y-2">
+                  <div className="grid grid-cols-[2.2fr_2.5fr_1.2fr_1.2fr_1.2fr_0.8fr_0.8fr] gap-2 rounded-md bg-[#eef2d9] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#556036]">
+                    <div>Name</div>
+                    <div>Description</div>
+                    <div>Occurrence</div>
+                    <div>Status</div>
+                    <div>Priority</div>
+                    <div>Type</div>
+                    <div>Actions</div>
+                  </div>
+                  {filteredTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="grid grid-cols-[2.2fr_2.5fr_1.2fr_1.2fr_1.2fr_0.8fr_0.8fr] gap-2 rounded-md border border-[#e2d7b5] bg-white/90 px-3 py-2 text-sm"
+                    >
+                      <input
+                        value={task.name}
+                        onChange={(e) =>
+                          setTasks((prev) =>
+                            prev.map((t) => (t.id === task.id ? { ...t, name: e.target.value } : t))
+                          )
+                        }
+                        className="rounded-md border border-[#d0c9a4] px-2 py-1 text-sm"
+                      />
+                      <input
+                        value={task.description || ""}
+                        onChange={(e) =>
+                          setTasks((prev) =>
+                            prev.map((t) =>
+                              t.id === task.id ? { ...t, description: e.target.value } : t
+                            )
+                          )
+                        }
+                        className="rounded-md border border-[#d0c9a4] px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="date"
+                        value={task.occurrence_date || ""}
+                        onChange={(e) =>
+                          setTasks((prev) =>
+                            prev.map((t) =>
+                              t.id === task.id ? { ...t, occurrence_date: e.target.value } : t
+                            )
+                          )
+                        }
+                        className="rounded-md border border-[#d0c9a4] px-2 py-1 text-sm"
+                      />
+                      <select
+                        value={task.status}
+                        onChange={(e) =>
+                          setTasks((prev) =>
+                            prev.map((t) =>
+                              t.id === task.id ? { ...t, status: e.target.value } : t
+                            )
+                          )
+                        }
+                        className="rounded-md border border-[#d0c9a4] px-2 py-1 text-sm"
+                      >
+                        {STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={task.priority}
+                        onChange={(e) =>
+                          setTasks((prev) =>
+                            prev.map((t) =>
+                              t.id === task.id ? { ...t, priority: e.target.value } : t
+                            )
+                          )
+                        }
+                        className="rounded-md border border-[#d0c9a4] px-2 py-1 text-sm"
+                      >
+                        {PRIORITY_OPTIONS.map((priority) => (
+                          <option key={priority} value={priority}>
+                            {priority}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="text-xs text-[#6b6d4b]">
+                        {task.task_type?.name || "—"}
                       </div>
-                      {task.recurring && (
-                        <span className="rounded-full bg-[#e2f0c8] px-2 py-1 text-[10px] font-semibold uppercase text-[#476524]">
-                          Recurring
-                        </span>
-                      )}
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setSaving(true);
+                            try {
+                              await fetch("/api/tasks", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  id: task.id,
+                                  name: task.name,
+                                  description: task.description || null,
+                                  occurrence_date: task.occurrence_date || null,
+                                  status: task.status,
+                                  priority: task.priority,
+                                }),
+                              });
+                              setMessage("Task updated.");
+                            } catch (err) {
+                              console.error("Failed to update task", err);
+                              setMessage("Unable to update task.");
+                            } finally {
+                              setSaving(false);
+                            }
+                          }}
+                          className="rounded-md bg-[#a0b764] px-2 py-1 text-[11px] font-semibold uppercase text-white"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditor(task)}
+                          className="rounded-md border border-[#d0c9a4] px-2 py-1 text-[11px] font-semibold uppercase text-[#4f5730]"
+                        >
+                          Details
+                        </button>
+                      </div>
                     </div>
-                  </button>
-                ))}
-                {!filteredTasks.length && (
-                  <p className="text-sm text-[#7a7f54]">No tasks found.</p>
-                )}
+                  ))}
+                  {!filteredTasks.length && (
+                    <p className="text-sm text-[#7a7f54]">No tasks found.</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
+      </div>
 
-        <div className="rounded-2xl border border-[#d0c9a4] bg-white/70 p-5 shadow-sm">
+      <div className="rounded-2xl border border-[#d0c9a4] bg-white/70 p-5 shadow-sm">
+        <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-[#314123]">Task type editor</h2>
-          <div className="mt-3 space-y-3">
-            {types.map((type) => (
-              <div key={type.id} className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTaskTypeOpen((prev) => !prev)}
+            className="rounded-md border border-[#d0c9a4] bg-white px-3 py-1 text-xs font-semibold uppercase text-[#4f5730]"
+          >
+            {taskTypeOpen ? "Collapse" : "Expand"}
+          </button>
+        </div>
+
+        {taskTypeOpen && (
+          <>
+            <div className="mt-3 space-y-3">
+              {types.map((type) => (
+                <div key={type.id} className="flex items-center gap-2">
+                  <input
+                    value={type.name}
+                    onChange={(e) =>
+                      setTypes((prev) =>
+                        prev.map((t) => (t.id === type.id ? { ...t, name: e.target.value } : t))
+                      )
+                    }
+                    className="flex-1 rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
+                  />
+                  <select
+                    value={type.color}
+                    onChange={(e) =>
+                      setTypes((prev) =>
+                        prev.map((t) => (t.id === type.id ? { ...t, color: e.target.value } : t))
+                      )
+                    }
+                    className="rounded-md border border-[#d0c9a4] px-2 py-2 text-sm"
+                  >
+                    {COLOR_OPTIONS.map((color) => (
+                      <option key={color} value={color}>
+                        {color}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateType(type)}
+                    className="rounded-md bg-[#a0b764] px-3 py-2 text-xs font-semibold uppercase text-white"
+                  >
+                    Save
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-lg border border-[#e2d7b5] bg-[#f9f6e7] p-4">
+              <h3 className="text-sm font-semibold text-[#314123]">Add new type</h3>
+              <div className="mt-2 flex gap-2">
                 <input
-                  value={type.name}
-                  onChange={(e) =>
-                    setTypes((prev) =>
-                      prev.map((t) => (t.id === type.id ? { ...t, name: e.target.value } : t))
-                    )
-                  }
+                  value={typeEditor.name}
+                  onChange={(e) => setTypeEditor((prev) => ({ ...prev, name: e.target.value }))}
                   className="flex-1 rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
+                  placeholder="Type name"
                 />
                 <select
-                  value={type.color}
-                  onChange={(e) =>
-                    setTypes((prev) =>
-                      prev.map((t) => (t.id === type.id ? { ...t, color: e.target.value } : t))
-                    )
-                  }
+                  value={typeEditor.color}
+                  onChange={(e) => setTypeEditor((prev) => ({ ...prev, color: e.target.value }))}
                   className="rounded-md border border-[#d0c9a4] px-2 py-2 text-sm"
                 >
                   {COLOR_OPTIONS.map((color) => (
@@ -446,50 +600,20 @@ export default function TaskEditorPage() {
                 </select>
                 <button
                   type="button"
-                  onClick={() => handleUpdateType(type)}
-                  className="rounded-md bg-[#a0b764] px-3 py-2 text-xs font-semibold uppercase text-white"
+                  onClick={handleCreateType}
+                  className="rounded-md bg-[#8fae4c] px-3 py-2 text-xs font-semibold uppercase text-white"
                 >
-                  Save
+                  Add
                 </button>
               </div>
-            ))}
-          </div>
-
-          <div className="mt-4 rounded-lg border border-[#e2d7b5] bg-[#f9f6e7] p-4">
-            <h3 className="text-sm font-semibold text-[#314123]">Add new type</h3>
-            <div className="mt-2 flex gap-2">
-              <input
-                value={typeEditor.name}
-                onChange={(e) => setTypeEditor((prev) => ({ ...prev, name: e.target.value }))}
-                className="flex-1 rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
-                placeholder="Type name"
-              />
-              <select
-                value={typeEditor.color}
-                onChange={(e) => setTypeEditor((prev) => ({ ...prev, color: e.target.value }))}
-                className="rounded-md border border-[#d0c9a4] px-2 py-2 text-sm"
-              >
-                {COLOR_OPTIONS.map((color) => (
-                  <option key={color} value={color}>
-                    {color}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleCreateType}
-                className="rounded-md bg-[#8fae4c] px-3 py-2 text-xs font-semibold uppercase text-white"
-              >
-                Add
-              </button>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {editorOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4 py-6">
-          <div className="w-full max-w-3xl rounded-2xl border border-[#d0c9a4] bg-[#fdfaf1] p-5 shadow-xl">
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#d0c9a4] bg-[#fdfaf1] p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-[#314123]">
                 {editing ? "Edit task" : "New task"}
@@ -617,7 +741,7 @@ export default function TaskEditorPage() {
                 <div>
                   <p className="text-xs font-semibold uppercase text-[#6b6f4c]">Recurrence</p>
                   <p className="text-[11px] text-[#6f754f]">
-                    Set repeating tasks similar to Google Calendar rules.
+                    Define how this task repeats over time.
                   </p>
                 </div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-[#4b5133]">
@@ -682,6 +806,17 @@ export default function TaskEditorPage() {
                 <p className="text-xs font-semibold uppercase text-[#6b6f4c]">
                   Apply edits to
                 </p>
+                <div className="mt-2">
+                  <label className="text-[11px] uppercase text-[#6b6f4c]">
+                    Future edits start from
+                  </label>
+                  <input
+                    type="date"
+                    value={futureFromDate}
+                    onChange={(e) => setFutureFromDate(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
+                  />
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {["single", "future", "all"].map((option) => (
                     <button
@@ -738,6 +873,23 @@ export default function TaskEditorPage() {
                   }
                   className="w-full rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
                   placeholder="https://example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase text-[#6b6f4c]">Comments</label>
+                <input
+                  value={(draft.comments || []).join(", ")}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      comments: e.target.value
+                        .split(",")
+                        .map((comment) => comment.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  className="w-full rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
+                  placeholder="Internal notes, follow ups"
                 />
               </div>
               <div className="space-y-2">

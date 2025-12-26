@@ -63,6 +63,7 @@ create table if not exists tasks (
   origin_date date,
   priority text not null default 'Medium',
   links text[] not null default '{}',
+  comments text[] not null default '{}',
   person_count integer,
   photos text[] not null default '{}',
   occurrence_date date,

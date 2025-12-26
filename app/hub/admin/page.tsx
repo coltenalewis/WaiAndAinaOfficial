@@ -367,6 +367,12 @@ export default function AdminPage() {
             >
               {loading ? "Creating…" : "Create Daily Report"}
             </button>
+            <Link
+              href="/hub/admin/tasks"
+              className="rounded-md bg-[#6f8f3d] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f9f9ec] shadow-md transition hover:bg-[#5f7f35]"
+            >
+              Task editor
+            </Link>
             <button
               type="button"
               disabled={!authorized || resettingTasks}
