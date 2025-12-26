@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const search = searchParams.get("search") || "";
   const start = searchParams.get("start") || "";
   const end = searchParams.get("end") || "";
-  const includeOccurrences = searchParams.get("includeOccurrences") === "true";
+  const includeOccurrences = searchParams.get("includeOccurrences") !== "false";
 
   const query: Record<string, string> = {
     select:
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   const body = await req.json().catch(() => null);
-  const { id, applyTo = "single", occurrenceDate } = body || {};
+  const { id, applyTo = "single", occurrenceDate, deleteOccurrences } = body || {};
 
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -122,6 +122,7 @@ export async function PATCH(req: Request) {
   delete updates.id;
   delete updates.applyTo;
   delete updates.occurrenceDate;
+  delete updates.deleteOccurrences;
 
   try {
     if (applyTo === "single") {
@@ -130,6 +131,14 @@ export async function PATCH(req: Request) {
         query: { id: `eq.${id}` },
         body: updates,
       });
+
+      if (updates.recurring === false && deleteOccurrences) {
+        await supabaseRequest("tasks", {
+          method: "DELETE",
+          query: { parent_task_id: `eq.${id}` },
+        });
+      }
+
       return NextResponse.json({ ok: true });
     }
 
@@ -162,9 +171,76 @@ export async function PATCH(req: Request) {
       body: updates,
     });
 
+    if (updates.recurring === false && deleteOccurrences) {
+      const deleteFilters: Record<string, string> = {};
+      if (applyTo === "all") {
+        deleteFilters.or = `id.eq.${seriesRoot},parent_task_id.eq.${seriesRoot}`;
+      } else {
+        deleteFilters.parent_task_id = `eq.${seriesRoot}`;
+        if (applyTo === "future" && compareDate) {
+          deleteFilters.occurrence_date = `gte.${compareDate}`;
+        }
+      }
+
+      await supabaseRequest("tasks", {
+        method: "DELETE",
+        query: deleteFilters,
+      });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Failed to update task:", err);
     return NextResponse.json({ error: "Unable to update task" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const body = await req.json().catch(() => null);
+  const { id, applyTo = "single", occurrenceDate } = body || {};
+
+  if (!id) {
+    return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  }
+
+  try {
+    if (applyTo === "single") {
+      await supabaseRequest("tasks", {
+        method: "DELETE",
+        query: { id: `eq.${id}` },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    const seriesData = await supabaseRequest<any[]>("tasks", {
+      query: { select: "id,parent_task_id,occurrence_date", id: `eq.${id}`, limit: 1 },
+    });
+    const target = seriesData?.[0];
+    if (!target) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    const seriesRoot = target.parent_task_id || target.id;
+    const compareDate = occurrenceDate || target.occurrence_date;
+
+    const filters: Record<string, string> = {};
+    if (applyTo === "all") {
+      filters.or = `id.eq.${seriesRoot},parent_task_id.eq.${seriesRoot}`;
+    } else {
+      filters.parent_task_id = `eq.${seriesRoot}`;
+      if (compareDate) {
+        filters.occurrence_date = `gte.${compareDate}`;
+      }
+    }
+
+    await supabaseRequest("tasks", {
+      method: "DELETE",
+      query: filters,
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("Failed to delete task:", err);
+    return NextResponse.json({ error: "Unable to delete task" }, { status: 500 });
   }
 }

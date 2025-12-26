@@ -62,12 +62,18 @@ export default function TaskEditorPage() {
     recurring: "",
     start: "",
     end: "",
-    includeOccurrences: "",
+    includeOccurrences: "true",
   });
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [applyTo, setApplyTo] = useState<"single" | "future" | "all">("single");
   const [futureFromDate, setFutureFromDate] = useState("");
+  const [deletePrompt, setDeletePrompt] = useState<{
+    task: TaskItem | null;
+    mode: "single" | "future" | "all";
+    occurrenceDate?: string | null;
+  }>({ task: null, mode: "single", occurrenceDate: null });
+  const [deleteOccurrences, setDeleteOccurrences] = useState(false);
   const [editing, setEditing] = useState<TaskItem | null>(null);
   const [draft, setDraft] = useState<TaskItem>({
     id: "",
@@ -182,6 +188,7 @@ export default function TaskEditorPage() {
     }
     setApplyTo("single");
     setFutureFromDate("");
+    setDeleteOccurrences(false);
     setEditorOpen(true);
   }
 
@@ -223,6 +230,7 @@ export default function TaskEditorPage() {
             id: editing.id,
             applyTo,
             occurrenceDate: futureFromDate || editing.occurrence_date,
+            deleteOccurrences,
             ...payload,
           }),
         });
@@ -270,6 +278,30 @@ export default function TaskEditorPage() {
       await loadTaskTypes();
     } catch (err) {
       console.error("Failed to update type", err);
+    }
+  }
+
+  async function handleDeleteTask() {
+    if (!deletePrompt.task) return;
+    setSaving(true);
+    try {
+      await fetch("/api/tasks", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: deletePrompt.task.id,
+          applyTo: deletePrompt.mode,
+          occurrenceDate: deletePrompt.occurrenceDate,
+        }),
+      });
+      setMessage("Task deleted.");
+      setDeletePrompt({ task: null, mode: "single", occurrenceDate: null });
+      await loadTasks();
+    } catch (err) {
+      console.error("Failed to delete task", err);
+      setMessage("Unable to delete task.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -368,8 +400,8 @@ export default function TaskEditorPage() {
               }
               className="w-full rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
             >
-              <option value="">Hide occurrences</option>
               <option value="true">Show occurrences</option>
+              <option value="false">Hide occurrences</option>
             </select>
             <div className="flex gap-2">
               <input
@@ -393,10 +425,10 @@ export default function TaskEditorPage() {
             ) : (
               <div className="overflow-x-auto">
                 <div className="min-w-[960px] space-y-2">
-                  <div className="grid grid-cols-[2.2fr_2.5fr_1.2fr_1.2fr_1.2fr_0.8fr_0.8fr] gap-2 rounded-md bg-[#eef2d9] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#556036]">
+                  <div className="grid grid-cols-[2.2fr_2.5fr_1.4fr_1.2fr_1.2fr_0.8fr_0.8fr] gap-2 rounded-md bg-[#eef2d9] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#556036]">
                     <div>Name</div>
                     <div>Description</div>
-                    <div>Occurrence</div>
+                    <div>Instance date</div>
                     <div>Status</div>
                     <div>Priority</div>
                     <div>Type</div>
@@ -405,7 +437,7 @@ export default function TaskEditorPage() {
                   {filteredTasks.map((task) => (
                     <div
                       key={task.id}
-                      className="grid grid-cols-[2.2fr_2.5fr_1.2fr_1.2fr_1.2fr_0.8fr_0.8fr] gap-2 rounded-md border border-[#e2d7b5] bg-white/90 px-3 py-2 text-sm"
+                      className="grid grid-cols-[2.2fr_2.5fr_1.4fr_1.2fr_1.2fr_0.8fr_0.8fr] gap-2 rounded-md border border-[#e2d7b5] bg-white/90 px-3 py-2 text-sm"
                     >
                       <input
                         value={task.name}
@@ -505,6 +537,19 @@ export default function TaskEditorPage() {
                           className="rounded-md bg-[#a0b764] px-2 py-1 text-[11px] font-semibold uppercase text-white"
                         >
                           Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeletePrompt({
+                              task,
+                              mode: "single",
+                              occurrenceDate: task.occurrence_date || null,
+                            })
+                          }
+                          className="rounded-md border border-red-200 px-2 py-1 text-[11px] font-semibold uppercase text-red-700"
+                        >
+                          Delete
                         </button>
                         <button
                           type="button"
@@ -724,7 +769,9 @@ export default function TaskEditorPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-[#6b6f4c]">Occurrence date</label>
+                <label className="text-xs font-semibold uppercase text-[#6b6f4c]">
+                  Instance date (this task)
+                </label>
                 <input
                   type="date"
                   value={draft.occurrence_date || ""}
@@ -837,6 +884,16 @@ export default function TaskEditorPage() {
                     </button>
                   ))}
                 </div>
+                {!draft.recurring && (
+                  <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#4b5133]">
+                    <input
+                      type="checkbox"
+                      checked={deleteOccurrences}
+                      onChange={(e) => setDeleteOccurrences(e.target.checked)}
+                    />
+                    Remove occurrences when disabling recurrence
+                  </label>
+                )}
               </div>
             )}
 
@@ -928,12 +985,27 @@ export default function TaskEditorPage() {
               </div>
             </div>
 
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditorOpen(false)}
-                className="rounded-md border border-[#d0c9a4] bg-white px-4 py-2 text-xs font-semibold uppercase text-[#4f5730]"
-              >
+              <div className="mt-5 flex items-center justify-end gap-2">
+                {editing && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDeletePrompt({
+                        task: editing,
+                        mode: "single",
+                        occurrenceDate: editing.occurrence_date || null,
+                      })
+                    }
+                    className="rounded-md border border-red-200 px-4 py-2 text-xs font-semibold uppercase text-red-700"
+                  >
+                    Delete task
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditorOpen(false)}
+                  className="rounded-md border border-[#d0c9a4] bg-white px-4 py-2 text-xs font-semibold uppercase text-[#4f5730]"
+                >
                 Cancel
               </button>
               <button
@@ -943,6 +1015,86 @@ export default function TaskEditorPage() {
                 className="rounded-md bg-[#8fae4c] px-4 py-2 text-xs font-semibold uppercase text-white disabled:opacity-60"
               >
                 {saving ? "Saving…" : "Save task"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletePrompt.task && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+          <div className="w-full max-w-md rounded-2xl border border-[#d0c9a4] bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-[#314123]">Delete task</h3>
+            <p className="mt-1 text-sm text-[#5f5a3b]">
+              Choose which tasks to delete for{" "}
+              <span className="font-semibold">{deletePrompt.task.name}</span>.
+            </p>
+            <div className="mt-4 space-y-2 text-sm">
+              {deletePrompt.task.recurring ? (
+                <>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={deletePrompt.mode === "single"}
+                      onChange={() =>
+                        setDeletePrompt((prev) => ({ ...prev, mode: "single" }))
+                      }
+                    />
+                    Just this task
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={deletePrompt.mode === "future"}
+                      onChange={() =>
+                        setDeletePrompt((prev) => ({ ...prev, mode: "future" }))
+                      }
+                    />
+                    This task and future occurrences
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={deletePrompt.mode === "all"}
+                      onChange={() => setDeletePrompt((prev) => ({ ...prev, mode: "all" }))}
+                    />
+                    All tasks in the series
+                  </label>
+                </>
+              ) : (
+                <p className="text-sm text-[#6b6d4b]">This task is not recurring.</p>
+              )}
+            </div>
+            {deletePrompt.mode === "future" && (
+              <div className="mt-4">
+                <label className="text-[11px] uppercase text-[#6b6f4c]">
+                  Delete starting from
+                </label>
+                <input
+                  type="date"
+                  value={deletePrompt.occurrenceDate || ""}
+                  onChange={(e) =>
+                    setDeletePrompt((prev) => ({ ...prev, occurrenceDate: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
+                />
+              </div>
+            )}
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletePrompt({ task: null, mode: "single", occurrenceDate: null })}
+                className="rounded-md border border-[#d0c9a4] px-4 py-2 text-xs font-semibold uppercase text-[#4f5730]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteTask}
+                disabled={saving}
+                className="rounded-md bg-red-500 px-4 py-2 text-xs font-semibold uppercase text-white disabled:opacity-60"
+              >
+                {saving ? "Deleting…" : "Delete"}
               </button>
             </div>
           </div>
