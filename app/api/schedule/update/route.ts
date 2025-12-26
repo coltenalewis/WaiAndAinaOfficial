@@ -51,6 +51,9 @@ async function fetchVolunteers() {
 }
 
 async function ensureSchedulePeople(scheduleId: string, volunteers: string[]) {
+  const normalizedVolunteers = volunteers
+    .map((name) => name.trim())
+    .filter(Boolean);
   const people = await supabaseRequest<SchedulePersonRow[]>("schedule_people", {
     query: {
       select: "id,name",
@@ -58,16 +61,20 @@ async function ensureSchedulePeople(scheduleId: string, volunteers: string[]) {
       order: "order_index.asc",
     },
   });
-  const existing = new Map(people.map((person) => [person.name, person.id]));
-  const missing = volunteers.filter((name) => !existing.has(name));
+  const existing = new Map(
+    people.map((person) => [person.name.trim(), person.id])
+  );
+  const missing = normalizedVolunteers.filter(
+    (name) => !existing.has(name)
+  );
 
   if (missing.length) {
     await supabaseRequest("schedule_people", {
       method: "POST",
       body: missing.map((name) => ({
         schedule_id: scheduleId,
-        name,
-        order_index: volunteers.indexOf(name) + 1,
+        name: name.trim(),
+        order_index: normalizedVolunteers.indexOf(name) + 1,
       })),
     });
   }
@@ -186,7 +193,10 @@ export async function POST(req: Request) {
 
     const volunteers = await fetchVolunteers();
     const people = await ensureSchedulePeople(scheduleId, volunteers);
-    const personEntry = people.find((entry) => entry.name === person);
+    const normalizedPerson = String(person).trim();
+    const personEntry = people.find(
+      (entry) => entry.name.trim() === normalizedPerson
+    );
 
     if (!personEntry) {
       return NextResponse.json(

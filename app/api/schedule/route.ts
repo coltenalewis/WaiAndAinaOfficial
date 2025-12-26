@@ -87,6 +87,40 @@ async function fetchSlots(): Promise<Slot[]> {
     },
   });
 
+  if (!rows.length) {
+    await supabaseRequest("shifts", {
+      method: "POST",
+      body: [
+        { label: "Breakfast", time_range: "10:30-11:30", order_index: 1 },
+        { label: "Lunch", time_range: "2:30-3:30", order_index: 2 },
+        { label: "Dinner", time_range: null, order_index: 3 },
+        { label: "Morning Shift 1", time_range: "7:30-9:00", order_index: 4 },
+        { label: "Morning Shift 2", time_range: "9:00-10:30", order_index: 5 },
+        { label: "Noon Shift 1", time_range: "11:30-1:00", order_index: 6 },
+        { label: "Noon Shift 2", time_range: "1:00-2:30", order_index: 7 },
+        { label: "Afternoon Shift 1", time_range: "3:30-4:00", order_index: 8 },
+        { label: "Afternoon Shift 2", time_range: "4:00-6:30", order_index: 9 },
+        { label: "Evening Shift", time_range: null, order_index: 10 },
+        { label: "Weekend Saturday Morning", time_range: null, order_index: 11 },
+        { label: "Weekend Saturday Evening", time_range: null, order_index: 12 },
+        { label: "Weekend Sunday Morning", time_range: null, order_index: 13 },
+        { label: "Weekend Sunday Evening", time_range: null, order_index: 14 },
+      ],
+    });
+    const seeded = await supabaseRequest<SlotRow[]>("shifts", {
+      query: {
+        select: "id,label,time_range,order_index",
+        order: "order_index.asc",
+      },
+    });
+    return seeded.map((slot) => ({
+      id: slot.id,
+      label: slot.label,
+      timeRange: slot.time_range || undefined,
+      isMeal: isMealShift(slot.label),
+    }));
+  }
+
   return rows.map((slot) => ({
     id: slot.id,
     label: slot.label,
