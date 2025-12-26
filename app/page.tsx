@@ -128,23 +128,6 @@ export default function HomePage() {
       }
 
       const data = await res.json();
-      if (data.requiresOnboarding) {
-        const onboardingName =
-          data.name ||
-          selectedName ||
-          users.find((user) => user.number === number.trim())?.name ||
-          "";
-
-        if (!onboardingName) {
-          setLoginError("We couldn't match that number to a user.");
-          setIsSubmitting(false);
-          return;
-        }
-
-        setShowLogin(false);
-        router.push(`/onboarding?name=${encodeURIComponent(onboardingName)}`);
-        return;
-      }
       const nextSession: UserSession = {
         name: data.name || selectedName,
         userType: data.userType || null,
