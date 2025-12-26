@@ -515,7 +515,7 @@ export default function TaskEditorPage() {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase text-[#6b6f4c]">Task type</label>
                 <select
-                  value={draft.task_type_id}
+                  value={draft.task_type_id || ""}
                   onChange={(e) => setDraft((prev) => ({ ...prev, task_type_id: e.target.value }))}
                   className="w-full rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
                 >
