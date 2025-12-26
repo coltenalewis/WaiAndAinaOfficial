@@ -37,7 +37,18 @@ export async function GET(req: Request) {
   try {
     const data = await supabaseRequest<any[]>("tasks", { query });
     return NextResponse.json({ tasks: data || [] });
-  } catch (err) {
+  } catch (err: any) {
+    const message = String(err?.message || "");
+    if (message.includes("comments")) {
+      const fallbackQuery = { ...query };
+      fallbackQuery.select = fallbackQuery.select.replace(",comments", "");
+      try {
+        const data = await supabaseRequest<any[]>("tasks", { query: fallbackQuery });
+        return NextResponse.json({ tasks: data || [] });
+      } catch (fallbackErr) {
+        console.error("Failed to load tasks (fallback):", fallbackErr);
+      }
+    }
     console.error("Failed to load tasks:", err);
     return NextResponse.json({ tasks: [] });
   }
@@ -56,16 +67,18 @@ export async function POST(req: Request) {
     const unit = body.recurrence_unit;
     const until = body.recurrence_until;
 
+    const payload = {
+      ...body,
+      origin_date: originDate,
+      occurrence_date: originDate,
+      recurring: isRecurring,
+    };
+
     const [parent] = await supabaseRequest<any[]>("tasks", {
       method: "POST",
       prefer: "return=representation",
       query: { select: "*" },
-      body: {
-        ...body,
-        origin_date: originDate,
-        occurrence_date: originDate,
-        recurring: isRecurring,
-      },
+      body: payload,
     });
 
     if (parent && isRecurring && originDate && until && interval > 0 && unit) {
@@ -104,7 +117,23 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ task: parent });
-  } catch (err) {
+  } catch (err: any) {
+    const message = String(err?.message || "");
+    if (message.includes("comments")) {
+      try {
+        const fallbackBody = { ...body };
+        delete fallbackBody.comments;
+        const [parent] = await supabaseRequest<any[]>("tasks", {
+          method: "POST",
+          prefer: "return=representation",
+          query: { select: "*" },
+          body: fallbackBody,
+        });
+        return NextResponse.json({ task: parent });
+      } catch (fallbackErr) {
+        console.error("Failed to create task (fallback):", fallbackErr);
+      }
+    }
     console.error("Failed to create task:", err);
     return NextResponse.json({ error: "Unable to create task" }, { status: 500 });
   }
@@ -126,11 +155,26 @@ export async function PATCH(req: Request) {
 
   try {
     if (applyTo === "single") {
+    try {
       await supabaseRequest("tasks", {
         method: "PATCH",
         query: { id: `eq.${id}` },
         body: updates,
       });
+    } catch (err: any) {
+      const message = String(err?.message || "");
+      if (message.includes("comments")) {
+        const fallbackUpdates = { ...updates };
+        delete (fallbackUpdates as Record<string, unknown>).comments;
+        await supabaseRequest("tasks", {
+          method: "PATCH",
+          query: { id: `eq.${id}` },
+          body: fallbackUpdates,
+        });
+      } else {
+        throw err;
+      }
+    }
 
       if (updates.recurring === false && deleteOccurrences) {
         await supabaseRequest("tasks", {
@@ -165,11 +209,26 @@ export async function PATCH(req: Request) {
       filters.id = `eq.${id}`;
     }
 
-    await supabaseRequest("tasks", {
-      method: "PATCH",
-      query: filters,
-      body: updates,
-    });
+    try {
+      await supabaseRequest("tasks", {
+        method: "PATCH",
+        query: filters,
+        body: updates,
+      });
+    } catch (err: any) {
+      const message = String(err?.message || "");
+      if (message.includes("comments")) {
+        const fallbackUpdates = { ...updates };
+        delete (fallbackUpdates as Record<string, unknown>).comments;
+        await supabaseRequest("tasks", {
+          method: "PATCH",
+          query: filters,
+          body: fallbackUpdates,
+        });
+      } else {
+        throw err;
+      }
+    }
 
     if (updates.recurring === false && deleteOccurrences) {
       const deleteFilters: Record<string, string> = {};
