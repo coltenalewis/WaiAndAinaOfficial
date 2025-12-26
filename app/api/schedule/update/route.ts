@@ -198,7 +198,24 @@ export async function POST(req: Request) {
       (entry) => entry.name.trim() === normalizedPerson
     );
 
-    if (!personEntry) {
+    let resolvedPerson = personEntry;
+    if (!resolvedPerson) {
+      const created = await supabaseRequest<SchedulePersonRow[]>(
+        "schedule_people",
+        {
+          method: "POST",
+          prefer: "return=representation",
+          body: {
+            schedule_id: scheduleId,
+            name: normalizedPerson,
+            order_index: people.length + 1,
+          },
+        }
+      );
+      resolvedPerson = created?.[0] ?? null;
+    }
+
+    if (!resolvedPerson) {
       return NextResponse.json(
         { error: "Person not found in schedule." },
         { status: 400 }
@@ -238,7 +255,7 @@ export async function POST(req: Request) {
 
     await upsertScheduleCell({
       scheduleId,
-      personId: personEntry.id,
+      personId: resolvedPerson.id,
       slotId,
       tasks,
       note: note.trim() || null,
