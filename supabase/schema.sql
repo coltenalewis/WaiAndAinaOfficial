@@ -107,7 +107,8 @@ create table if not exists schedule_people (
   schedule_id uuid references schedules(id) on delete cascade,
   name text not null,
   order_index integer not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique (schedule_id, name)
 );
 
 create table if not exists schedule_cells (
@@ -117,7 +118,8 @@ create table if not exists schedule_cells (
   shift_id uuid references shifts(id) on delete cascade,
   tasks text[] not null default '{}',
   note text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique (schedule_id, person_id, shift_id)
 );
 
 insert into shifts (label, time_range, order_index)

@@ -154,28 +154,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const existingCells = await supabaseRequest<ScheduleCellRow[]>(
-      "schedule_cells",
-      {
+    if (!hasContent) {
+      await supabaseRequest("schedule_cells", {
+        method: "DELETE",
         query: {
-          select: "id",
           schedule_id: `eq.${scheduleId}`,
           person_id: `eq.${personEntry.id}`,
           shift_id: `eq.${slotId}`,
-          limit: 1,
         },
-      }
-    );
-
-    const cellId = existingCells?.[0]?.id || null;
-
-    if (!hasContent) {
-      if (cellId) {
-        await supabaseRequest("schedule_cells", {
-          method: "DELETE",
-          query: { id: `eq.${cellId}` },
-        });
-      }
+      });
 
       const remaining = await supabaseRequest<ScheduleCellRow[]>(
         "schedule_cells",
@@ -198,27 +185,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    if (cellId) {
-      await supabaseRequest("schedule_cells", {
-        method: "PATCH",
-        query: { id: `eq.${cellId}` },
-        body: {
-          tasks,
-          note: note.trim() || null,
-        },
-      });
-    } else {
-      await supabaseRequest("schedule_cells", {
-        method: "POST",
-        body: {
-          schedule_id: scheduleId,
-          person_id: personEntry.id,
-          shift_id: slotId,
-          tasks,
-          note: note.trim() || null,
-        },
-      });
-    }
+    await supabaseRequest("schedule_cells", {
+      method: "POST",
+      prefer: "resolution=merge-duplicates,return=representation",
+      query: {
+        on_conflict: "schedule_id,person_id,shift_id",
+      },
+      body: {
+        schedule_id: scheduleId,
+        person_id: personEntry.id,
+        shift_id: slotId,
+        tasks,
+        note: note.trim() || null,
+      },
+    });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

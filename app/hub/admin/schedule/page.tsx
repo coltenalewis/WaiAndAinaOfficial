@@ -1182,7 +1182,7 @@ export default function AdminScheduleEditorPage() {
           </datalist>
         </div>
 
-        <div className="relative w-[360px] space-y-4 overflow-y-auto">
+        <div className="relative w-[420px] shrink-0 space-y-4 overflow-y-auto">
           <div
             className="z-20 w-full rounded-2xl border border-[#d0c9a4] bg-white/90 shadow-lg backdrop-blur"
           >
