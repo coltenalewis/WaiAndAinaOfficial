@@ -166,8 +166,6 @@ export default function AdminScheduleEditorPage() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleNote, setScheduleNote] = useState<string | null>(null);
-  const [newPersonName, setNewPersonName] = useState("");
-  const [volunteerSyncMessage, setVolunteerSyncMessage] = useState<string | null>(null);
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null);
   const [taskEditFields, setTaskEditFields] = useState<TaskPropertyField[]>([]);
   const [taskDetailLoading, setTaskDetailLoading] = useState(false);
@@ -181,7 +179,6 @@ export default function AdminScheduleEditorPage() {
   const [newShift, setNewShift] = useState({ label: "", timeRange: "" });
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const lastInlineAddRef = useRef<Record<string, string>>({});
-  const autoCreateRef = useRef<string | null>(null);
 
   const formatDateInput = (value: string) => {
     if (!value) return "";
@@ -217,7 +214,7 @@ export default function AdminScheduleEditorPage() {
       try {
         const [typeRes, scheduleListRes, shiftsRes] = await Promise.all([
           fetch("/api/task-types"),
-          fetch("/api/schedule/list?ensureStaging=1"),
+          fetch("/api/schedule/list"),
           fetch("/api/shifts"),
         ]);
 
@@ -234,6 +231,9 @@ export default function AdminScheduleEditorPage() {
             setSelectedDate(json.selectedDate);
           } else if (Array.isArray(json.schedules) && json.schedules.length) {
             setSelectedDate(json.schedules[json.schedules.length - 1].dateLabel);
+          } else {
+            const today = new Date().toISOString().slice(0, 10);
+            setSelectedDate(formatDateInput(today));
           }
         }
         if (shiftsRes.ok) {
@@ -253,17 +253,10 @@ export default function AdminScheduleEditorPage() {
     () => availableSchedules.find((entry) => entry.dateLabel === selectedDate),
     [availableSchedules, selectedDate]
   );
-  const scheduleMissing = Boolean(
-    scheduleMode === "page" && selectedDate && !selectedEntry
-  );
 
   useEffect(() => {
     if (!authorized) return;
     if (scheduleMode === "page" && !selectedDate) return;
-    if (scheduleMissing) {
-      setScheduleData(null);
-      return;
-    }
     let cancelled = false;
 
     const loadSchedule = async () => {
@@ -295,7 +288,7 @@ export default function AdminScheduleEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [authorized, scheduleMissing, scheduleMode, selectedDate]);
+  }, [authorized, scheduleMode, selectedDate]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -329,6 +322,14 @@ export default function AdminScheduleEditorPage() {
     if (!selectedDate) return "Schedule editor";
     return `Editing Staging - ${selectedDate}`;
   }, [selectedDate]);
+
+  const scheduleOptions = useMemo(() => {
+    const options = [...availableSchedules];
+    if (selectedDate && !options.find((entry) => entry.dateLabel === selectedDate)) {
+      options.push({ dateLabel: selectedDate });
+    }
+    return options;
+  }, [availableSchedules, selectedDate]);
 
   useEffect(() => {
     if (!authorized) return;
@@ -750,45 +751,18 @@ export default function AdminScheduleEditorPage() {
         setScheduleData(json);
         setMessage(null);
       }
+      if (scheduleMode === "page") {
+        const listRes = await fetch("/api/schedule/list");
+        if (listRes.ok) {
+          const listJson = await listRes.json();
+          setAvailableSchedules(listJson.schedules || []);
+        }
+      }
     } catch (err) {
       console.error("Refresh failed", err);
       setMessage("Unable to refresh schedule. Try again soon.");
     }
   };
-
-  const ensureScheduleForDate = async (dateLabel: string) => {
-    if (scheduleMode !== "page") return;
-    if (!dateLabel) return;
-    setScheduleNote(null);
-    try {
-      const res = await fetch("/api/schedule/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dateLabel }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to create schedule");
-      }
-      setScheduleNote(`Created schedule for ${dateLabel}.`);
-      const listRes = await fetch("/api/schedule/list?ensureStaging=1");
-      if (listRes.ok) {
-        const listJson = await listRes.json();
-        setAvailableSchedules(listJson.schedules || []);
-      }
-      await refreshSchedule();
-    } catch (err) {
-      console.error("Failed to create schedule", err);
-      setScheduleNote("Unable to create that schedule right now.");
-    }
-  };
-
-  useEffect(() => {
-    if (!selectedDate || !scheduleMissing) return;
-    if (autoCreateRef.current === selectedDate) return;
-    autoCreateRef.current = selectedDate;
-    ensureScheduleForDate(selectedDate);
-  }, [scheduleMissing, selectedDate]);
 
   const publishSchedule = async () => {
     if (scheduleMode !== "page") return;
@@ -808,55 +782,6 @@ export default function AdminScheduleEditorPage() {
     } catch (err) {
       console.error("Failed to publish schedule", err);
       setScheduleNote("Unable to publish the schedule right now.");
-    }
-  };
-
-  const syncVolunteers = async () => {
-    if (scheduleMode !== "page") return;
-    if (!selectedDate) return;
-    setVolunteerSyncMessage(null);
-    try {
-      const res = await fetch("/api/schedule/volunteers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dateLabel: selectedDate, staging: true }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to sync volunteers");
-      }
-      setVolunteerSyncMessage(
-        `Added ${json.added || 0} volunteers and removed ${json.removed || 0} rows.`
-      );
-      await refreshSchedule();
-    } catch (err) {
-      console.error("Failed to sync volunteers", err);
-      setVolunteerSyncMessage("Unable to sync volunteers right now.");
-    }
-  };
-
-  const addCustomPersonRow = async () => {
-    if (!newPersonName.trim()) return;
-    if (scheduleMode === "page" && !selectedDate) return;
-    try {
-      const res = await fetch("/api/schedule/people", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newPersonName.trim(),
-          dateLabel: scheduleMode === "page" ? selectedDate : undefined,
-          staging: scheduleMode === "page",
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to add person");
-      }
-      setNewPersonName("");
-      await refreshSchedule();
-    } catch (err) {
-      console.error("Failed to add person", err);
-      setMessage("Unable to add that person row.");
     }
   };
 
@@ -910,110 +835,86 @@ export default function AdminScheduleEditorPage() {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col gap-4 overflow-hidden px-3 py-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Admin schedule</p>
-          <h1 className="text-2xl font-semibold text-[#314123]">{scheduleTitle}</h1>
-          <p className="text-sm text-[#5f5a3b]">
-            Drag tasks anywhere and reorder inside a shift with smooth autosave.
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#6a6c4d]">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#fdfbf4]">
+      <div className="border-b border-[#e2d7b5] bg-[#f7f4e6] px-6 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Admin schedule</p>
+            <h1 className="text-2xl font-semibold text-[#314123]">{scheduleTitle}</h1>
+            <p className="text-sm text-[#5f5a3b]">
+              Staging schedule with auto-synced volunteers and background saves.
+            </p>
+            {selectedEntry && (
+              <p className="mt-1 text-xs text-[#6a6c4d]">
+                Live: {selectedEntry.liveId ? "ready" : "missing"} • Staging:{" "}
+                {selectedEntry.stagingId ? "ready" : "missing"}
+              </p>
+            )}
+            {scheduleNote && (
+              <p className="mt-2 text-xs text-[#4b5133]">{scheduleNote}</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[#6a6c4d]">
             <button
               type="button"
               onClick={refreshSchedule}
-              className="rounded-md border border-[#d0c9a4] bg-white px-3 py-1 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8]"
+              className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8]"
             >
-              Refresh schedule
-            </button>
-            <Link
-              href="/hub/admin"
-              className="rounded-md border border-[#d0c9a4] bg-[#f6f1dd] px-3 py-1 font-semibold uppercase tracking-[0.08em] text-[#4b5133] shadow-sm transition hover:bg-[#ede6c6]"
-            >
-              Back to admin
-            </Link>
-          </div>
-          <div className="mt-3 flex flex-wrap items-end gap-3 text-xs text-[#6a6c4d]">
-            <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-[#7a7f54]">
-                Schedule date
-              </span>
-              <input
-                type="date"
-                value={selectedDate ? formatLabelToInput(selectedDate) : ""}
-                onChange={(e) => {
-                  const next = formatDateInput(e.target.value);
-                  setSelectedDate(next);
-                }}
-                disabled={scheduleMode !== "page"}
-                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-xs text-[#314123] focus:border-[#8fae4c] focus:outline-none"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-[#7a7f54]">
-                Existing schedules
-              </span>
-              <select
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                disabled={scheduleMode !== "page"}
-                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-xs text-[#314123] focus:border-[#8fae4c] focus:outline-none"
-              >
-                <option value="">Select a date</option>
-                {availableSchedules.map((entry) => (
-                  <option key={entry.dateLabel} value={entry.dateLabel}>
-                    {entry.dateLabel}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => ensureScheduleForDate(selectedDate)}
-              disabled={!selectedDate || scheduleMode !== "page"}
-              className="rounded-md border border-[#d0c9a4] bg-white px-3 py-1 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8] disabled:opacity-60"
-            >
-              Create schedule
+              Refresh
             </button>
             <button
               type="button"
               onClick={publishSchedule}
-              disabled={!selectedDate || scheduleMissing || scheduleMode !== "page"}
-              className="rounded-md bg-[#8fae4c] px-3 py-1 font-semibold uppercase tracking-[0.08em] text-[#f9f9ec] shadow-sm transition hover:bg-[#7e9c44] disabled:opacity-60"
+              disabled={!selectedDate || scheduleMode !== "page"}
+              className="rounded-md bg-[#8fae4c] px-4 py-2 font-semibold uppercase tracking-[0.08em] text-[#f9f9ec] shadow-sm transition hover:bg-[#7e9c44] disabled:opacity-60"
             >
               Publish
             </button>
-            <button
-              type="button"
-              onClick={syncVolunteers}
-              disabled={!selectedDate || scheduleMode !== "page"}
-              className="rounded-md border border-[#d0c9a4] bg-[#f4f1df] px-3 py-1 font-semibold uppercase tracking-[0.08em] text-[#4b5133] shadow-sm transition hover:bg-[#ede6c6] disabled:opacity-60"
+            <Link
+              href="/hub/admin"
+              className="rounded-md border border-[#d0c9a4] bg-[#f6f1dd] px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#4b5133] shadow-sm transition hover:bg-[#ede6c6]"
             >
-              Add all volunteers
-            </button>
+              Back to admin
+            </Link>
           </div>
-          {scheduleMissing && (
-            <p className="mt-2 text-xs text-[#a05252]">
-              No schedule exists for {selectedDate}. Create it to begin editing.
-            </p>
-          )}
-          {selectedEntry && (
-            <p className="mt-1 text-xs text-[#6a6c4d]">
-              Live: {selectedEntry.liveId ? "ready" : "missing"} • Staging:{" "}
-              {selectedEntry.stagingId ? "ready" : "missing"}
-            </p>
-          )}
-          {scheduleMode === "database" && (
-            <p className="mt-1 text-xs text-[#6a6c4d]">
-              Editing the default schedule database (no per-date staging).
-            </p>
-          )}
-          {scheduleNote && (
-            <p className="mt-2 text-xs text-[#4b5133]">{scheduleNote}</p>
-          )}
-          {volunteerSyncMessage && (
-            <p className="mt-1 text-xs text-[#4b5133]">{volunteerSyncMessage}</p>
-          )}
+        </div>
+        <div className="mt-4 flex flex-wrap items-end gap-3 text-xs text-[#6a6c4d]">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-[#7a7f54]">
+              Schedule date
+            </span>
+            <input
+              type="date"
+              value={selectedDate ? formatLabelToInput(selectedDate) : ""}
+              onChange={(e) => {
+                const next = formatDateInput(e.target.value);
+                setSelectedDate(next);
+              }}
+              disabled={scheduleMode !== "page"}
+              className="rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-xs text-[#314123] focus:border-[#8fae4c] focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-[#7a7f54]">
+              Recent schedule dates
+            </span>
+            <select
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              disabled={scheduleMode !== "page"}
+              className="rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-xs text-[#314123] focus:border-[#8fae4c] focus:outline-none"
+            >
+              <option value="">Select a date</option>
+              {scheduleOptions.map((entry) => (
+                <option key={entry.dateLabel} value={entry.dateLabel}>
+                  {entry.dateLabel}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="rounded-full bg-[#f0f4de] px-3 py-2 text-[11px] font-semibold text-[#4b5133]">
+            Volunteers auto-sync from the Users database
+          </span>
         </div>
       </div>
 
@@ -1023,7 +924,7 @@ export default function AdminScheduleEditorPage() {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 gap-4">
+      <div className="flex min-h-0 flex-1 gap-4 px-4 py-4">
         <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-[#d0c9a4] bg-white/70 p-4 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1039,29 +940,10 @@ export default function AdminScheduleEditorPage() {
               </span>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-end gap-2 text-xs text-[#6a6c4d]">
-            <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-[#7a7f54]">
-                Add custom person
-              </span>
-              <input
-                value={newPersonName}
-                onChange={(e) => setNewPersonName(e.target.value)}
-                placeholder="Type a name"
-                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-xs text-[#314123] focus:border-[#8fae4c] focus:outline-none"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={addCustomPersonRow}
-              disabled={
-                !newPersonName.trim() ||
-                (scheduleMode === "page" && !selectedDate)
-              }
-              className="rounded-md border border-[#d0c9a4] bg-white px-3 py-1 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8] disabled:opacity-60"
-            >
-              Add person row
-            </button>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#6a6c4d]">
+            <span className="rounded-full bg-[#f6f1dd] px-3 py-1 font-semibold text-[#4b5133]">
+              Volunteers auto-populate this grid.
+            </span>
             <span className="text-[11px] text-[#7a7f54]">
               {pendingCells.size ? "Saving updates…" : "All changes saved."}
             </span>
