@@ -138,37 +138,46 @@ async function syncSchedulePeople(scheduleId: string, volunteers: string[]) {
     },
   });
 
+  const normalizedVolunteers = volunteers.map((name) => name.trim()).filter(Boolean);
   const existingNames = new Map(
-    people.map((person) => [person.name, person])
+    people.map((person) => [person.name.trim(), person])
   );
-  const desiredSet = new Set(volunteers);
-  const missing = volunteers.filter((name) => !existingNames.has(name));
-  const extra = people.filter((person) => !desiredSet.has(person.name));
+  const desiredSet = new Set(normalizedVolunteers);
+  const missing = normalizedVolunteers.filter((name) => !existingNames.has(name));
 
   if (missing.length) {
     await supabaseRequest("schedule_people", {
       method: "POST",
       body: missing.map((name) => ({
         schedule_id: scheduleId,
-        name,
-        order_index: volunteers.indexOf(name) + 1,
+        name: name.trim(),
+        order_index: normalizedVolunteers.indexOf(name) + 1,
       })),
     });
   }
 
-  if (extra.length) {
-    await supabaseRequest("schedule_people", {
-      method: "DELETE",
-      query: {
-        schedule_id: `eq.${scheduleId}`,
-        name: `in.(${extra.map((person) => `"${person.name}"`).join(",")})`,
-      },
-    });
+  const refreshed = await supabaseRequest<SchedulePersonRow[]>("schedule_people", {
+    query: {
+      select: "id,name,order_index",
+      schedule_id: `eq.${scheduleId}`,
+      order: "order_index.asc",
+    },
+  });
+
+  if (!normalizedVolunteers.length) {
+    return refreshed;
   }
 
+  const ordered = [
+    ...normalizedVolunteers,
+    ...refreshed
+      .map((person) => person.name.trim())
+      .filter((name) => !desiredSet.has(name)),
+  ];
+
   await Promise.all(
-    people.map((person) => {
-      const nextIndex = volunteers.indexOf(person.name);
+    refreshed.map((person) => {
+      const nextIndex = ordered.indexOf(person.name.trim());
       if (nextIndex < 0) return Promise.resolve(null);
       if (person.order_index === nextIndex + 1) return Promise.resolve(null);
       return supabaseRequest("schedule_people", {
