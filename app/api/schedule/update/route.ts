@@ -156,6 +156,13 @@ export async function POST(req: Request) {
   try {
     const { tasks, note } = parseCell(replaceValue || "");
     const hasContent = tasks.length > 0 || note.trim().length > 0;
+    console.log("schedule.update payload", {
+      isoDate,
+      person: String(person).trim(),
+      slotId,
+      taskCount: tasks.length,
+      hasNote: Boolean(note.trim()),
+    });
 
     let scheduleRows = await supabaseRequest<ScheduleRow[]>("schedules", {
       query: {
@@ -167,6 +174,7 @@ export async function POST(req: Request) {
     });
 
     let scheduleId = scheduleRows?.[0]?.id || null;
+    console.log("schedule.update schedule lookup", { scheduleId });
 
     if (!scheduleId && !hasContent) {
       return NextResponse.json({ ok: true });
@@ -194,6 +202,7 @@ export async function POST(req: Request) {
         },
       });
       scheduleId = refreshed?.[0]?.id || null;
+      console.log("schedule.update schedule refresh", { scheduleId });
     }
 
     if (!scheduleId) {
@@ -209,6 +218,11 @@ export async function POST(req: Request) {
     const personEntry = people.find(
       (entry) => entry.name.trim() === normalizedPerson
     );
+    console.log("schedule.update people lookup", {
+      normalizedPerson,
+      peopleCount: people.length,
+      personFound: Boolean(personEntry),
+    });
 
     let resolvedPerson = personEntry;
     if (!resolvedPerson) {
@@ -225,6 +239,9 @@ export async function POST(req: Request) {
         }
       );
       resolvedPerson = created?.[0] ?? null;
+      console.log("schedule.update person created", {
+        personId: resolvedPerson?.id,
+      });
     }
 
     if (!resolvedPerson) {
@@ -272,6 +289,11 @@ export async function POST(req: Request) {
       tasks,
       note: note.trim() || null,
     });
+    console.log("schedule.update cell upserted", {
+      scheduleId,
+      personId: resolvedPerson.id,
+      slotId,
+    });
 
     const verify = await supabaseRequest<ScheduleCellRow[]>(
       "schedule_cells",
@@ -285,6 +307,9 @@ export async function POST(req: Request) {
         },
       }
     );
+    console.log("schedule.update cell verify", {
+      found: verify.length,
+    });
     if (!verify.length) {
       return NextResponse.json(
         { error: "Schedule cell failed to persist." },
