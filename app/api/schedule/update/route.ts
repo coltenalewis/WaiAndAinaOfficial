@@ -227,7 +227,7 @@ export async function POST(req: Request) {
         method: "DELETE",
         query: {
           schedule_id: `eq.${scheduleId}`,
-          person_id: `eq.${personEntry.id}`,
+          person_id: `eq.${resolvedPerson.id}`,
           shift_id: `eq.${slotId}`,
         },
       });
