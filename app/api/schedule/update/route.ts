@@ -185,6 +185,18 @@ export async function POST(req: Request) {
     }
 
     if (!scheduleId) {
+      const refreshed = await supabaseRequest<ScheduleRow[]>("schedules", {
+        query: {
+          select: "id",
+          schedule_date: `eq.${isoDate}`,
+          state: "eq.staging",
+          limit: 1,
+        },
+      });
+      scheduleId = refreshed?.[0]?.id || null;
+    }
+
+    if (!scheduleId) {
       return NextResponse.json(
         { error: "Unable to create schedule." },
         { status: 500 }
@@ -260,6 +272,25 @@ export async function POST(req: Request) {
       tasks,
       note: note.trim() || null,
     });
+
+    const verify = await supabaseRequest<ScheduleCellRow[]>(
+      "schedule_cells",
+      {
+        query: {
+          select: "id",
+          schedule_id: `eq.${scheduleId}`,
+          person_id: `eq.${resolvedPerson.id}`,
+          shift_id: `eq.${slotId}`,
+          limit: 1,
+        },
+      }
+    );
+    if (!verify.length) {
+      return NextResponse.json(
+        { error: "Schedule cell failed to persist." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
