@@ -71,6 +71,20 @@ function typeColorClasses(color?: string) {
   return map[color || "default"] || map.default;
 }
 
+function statusBadgeClasses(status?: string) {
+  const normalized = (status || "").toLowerCase();
+  if (normalized === "completed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+  if (normalized === "in progress") {
+    return "border-sky-200 bg-sky-50 text-sky-800";
+  }
+  if (normalized === "not started") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+  return "border-[#d0c9a4] bg-[#f6f1dd] text-[#4b5133]";
+}
+
 async function loadImageElement(file: File): Promise<HTMLImageElement> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -506,6 +520,63 @@ export default function AdminScheduleEditorPage() {
 
     return filtered.sort(sortTasks);
   }, [oneOffTasks, taskSearch, taskTypeFilter, sortTasks]);
+
+  const dayOverview = useMemo(() => {
+    if (!scheduleData) return null;
+
+    const taskLookup = new Map<string, TaskCatalogItem>();
+    [...recurringTasks, ...oneOffTasks].forEach((task) => {
+      const name = task.name.trim().toLowerCase();
+      if (name) taskLookup.set(name, task);
+    });
+
+    const taskMap = new Map<
+      string,
+      { name: string; status: string; notes: Set<string>; assignments: number }
+    >();
+    const standaloneNotes = new Set<string>();
+
+    scheduleData.cells.forEach((row) => {
+      row.forEach((cell) => {
+        const note = cell.note?.trim();
+        if (!cell.tasks.length && note) {
+          standaloneNotes.add(note);
+        }
+        cell.tasks.forEach((task) => {
+          const name = task.name.trim();
+          if (!name) return;
+          const key = name.toLowerCase();
+          if (!taskMap.has(key)) {
+            const meta = taskLookup.get(key);
+            taskMap.set(key, {
+              name,
+              status: meta?.status || "Not Started",
+              notes: new Set<string>(),
+              assignments: 0,
+            });
+          }
+          const entry = taskMap.get(key);
+          if (!entry) return;
+          entry.assignments += 1;
+          if (note) entry.notes.add(note);
+        });
+      });
+    });
+
+    const tasks = Array.from(taskMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+    const completed = tasks.filter(
+      (task) => task.status.toLowerCase() === "completed"
+    ).length;
+    return {
+      tasks,
+      total: tasks.length,
+      completed,
+      open: tasks.length - completed,
+      standaloneNotes: Array.from(standaloneNotes),
+    };
+  }, [oneOffTasks, recurringTasks, scheduleData]);
 
   const findCoord = useCallback(
     (person: string | undefined, slotId: string | undefined, data: ScheduleResponse | null) => {
@@ -1697,6 +1768,74 @@ export default function AdminScheduleEditorPage() {
               <option key={name} value={name} />
             ))}
           </datalist>
+          {dayOverview && (
+            <div className="mt-4 rounded-xl border border-[#d0c9a4] bg-white/90 p-4 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-[#314123]">Day overview</h3>
+                  <p className="text-xs text-[#6a6c4d]">
+                    Tasks issued for {scheduleData?.scheduleDate || "this day"} with status and notes.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] text-[#4b5133]">
+                  <span className="rounded-full border border-[#d0c9a4] bg-[#f6f1dd] px-3 py-1 font-semibold">
+                    {dayOverview.total} tasks
+                  </span>
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-800">
+                    {dayOverview.completed} completed
+                  </span>
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-800">
+                    {dayOverview.open} open
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {dayOverview.tasks.length ? (
+                  dayOverview.tasks.map((task) => (
+                    <div
+                      key={task.name}
+                      className="rounded-lg border border-[#e2d7b5] bg-[#faf7eb] px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-[#314123]">{task.name}</div>
+                        <span
+                          className={`rounded-full border px-2 py-[2px] text-[10px] font-semibold uppercase ${statusBadgeClasses(
+                            task.status
+                          )}`}
+                        >
+                          {task.status || "Not Started"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-[#6a6c4d]">
+                        Assigned {task.assignments} time{task.assignments === 1 ? "" : "s"}.
+                      </p>
+                      {task.notes.size > 0 && (
+                        <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-[#4b5133]">
+                          {Array.from(task.notes).map((note) => (
+                            <li key={note}>{note}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-[#7a7f54]">No tasks listed for this day yet.</p>
+                )}
+              </div>
+              {dayOverview.standaloneNotes.length > 0 && (
+                <div className="mt-4 rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] px-3 py-2 text-[11px] text-[#4b5133]">
+                  <p className="font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">
+                    Notes without tasks
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {dayOverview.standaloneNotes.map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div
