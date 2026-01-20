@@ -27,6 +27,8 @@ type TaskCatalogItem = {
   parentTaskId?: string | null;
   description?: string | null;
   personCount?: number | null;
+  timeSlots?: string[] | null;
+  estimatedTime?: string | null;
 };
 type TaskTypeOption = { name: string; color: string };
 type StatusOption = { name: string; color: string };
@@ -53,6 +55,7 @@ type DragPayload = {
 type CellContent = { tasks: ScheduledTask[]; note: string };
 
 const DRAG_DATA_TYPE = "application/json/task";
+const DEFAULT_SHIFT_HOURS = 1.5;
 
 function typeColorClasses(color?: string) {
   const map: Record<string, string> = {
@@ -83,6 +86,14 @@ function statusBadgeClasses(status?: string) {
     return "border-amber-200 bg-amber-50 text-amber-800";
   }
   return "border-[#d0c9a4] bg-[#f6f1dd] text-[#4b5133]";
+}
+
+function parseEstimatedHours(value?: string | null) {
+  if (!value) return DEFAULT_SHIFT_HOURS;
+  const match = String(value).match(/[\d.]+/);
+  const parsed = match ? Number.parseFloat(match[0]) : Number.NaN;
+  if (Number.isNaN(parsed) || parsed <= 0) return DEFAULT_SHIFT_HOURS;
+  return parsed;
 }
 
 async function loadImageElement(file: File): Promise<HTMLImageElement> {
@@ -167,6 +178,7 @@ export default function AdminScheduleEditorPage() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleNote, setScheduleNote] = useState<string | null>(null);
+  const [autoGenerating, setAutoGenerating] = useState(false);
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null);
   const [taskEditDraft, setTaskEditDraft] = useState({
     description: "",
@@ -371,6 +383,8 @@ export default function AdminScheduleEditorPage() {
             parentTaskId: task.parent_task_id || null,
             description: task.description || null,
             personCount: task.person_count ?? null,
+            timeSlots: task.time_slots || [],
+            estimatedTime: task.estimated_time || null,
           }));
           setRecurringTasks(items);
         } else if (!cancelled && !selectedDate) {
@@ -390,6 +404,8 @@ export default function AdminScheduleEditorPage() {
             parentTaskId: task.parent_task_id || null,
             description: task.description || null,
             personCount: task.person_count ?? null,
+            timeSlots: task.time_slots || [],
+            estimatedTime: task.estimated_time || null,
           }));
           setOneOffTasks(items);
         }
@@ -695,6 +711,8 @@ export default function AdminScheduleEditorPage() {
             parentTaskId: task.parent_task_id || null,
             description: task.description || null,
             personCount: task.person_count ?? null,
+            timeSlots: task.time_slots || [],
+            estimatedTime: task.estimated_time || null,
           }));
           setOneOffTasks(items);
         }
@@ -753,6 +771,8 @@ export default function AdminScheduleEditorPage() {
             parentTaskId: task.parent_task_id || null,
             description: task.description || null,
             personCount: task.person_count ?? null,
+            timeSlots: task.time_slots || [],
+            estimatedTime: task.estimated_time || null,
           }));
           setRecurringTasks(items);
         }
@@ -1290,6 +1310,118 @@ export default function AdminScheduleEditorPage() {
     }
   };
 
+  const autoGenerateSchedule = async () => {
+    if (!scheduleData) return;
+    if (scheduleMode === "page" && !selectedDate) {
+      setScheduleNote("Pick a schedule date before auto-generating.");
+      return;
+    }
+
+    setAutoGenerating(true);
+    setScheduleNote(null);
+
+    try {
+      const slotLabelMap = new Map(
+        scheduleData.slots.map((slot, index) => [slot.label.toLowerCase(), { slot, index }])
+      );
+      const slotIndexesById = new Map(
+        scheduleData.slots.map((slot, index) => [slot.id, index])
+      );
+
+      const tasksToPlace = [...recurringTasks, ...oneOffTasks]
+        .filter((task) => (task.status || "").toLowerCase() !== "completed")
+        .sort((a, b) => {
+          if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
+          const priorityDiff = priorityRank(a.priority) - priorityRank(b.priority);
+          if (priorityDiff !== 0) return priorityDiff;
+          return a.name.localeCompare(b.name);
+        });
+
+      const nextCells = scheduleData.cells.map((row) =>
+        row.map((cell) => ({ tasks: [...cell.tasks], note: cell.note }))
+      );
+      const changedCells = new Set<string>();
+
+      const addTaskToCell = (rowIdx: number, colIdx: number, task: ScheduledTask) => {
+        const cell = nextCells[rowIdx]?.[colIdx];
+        if (!cell) return;
+        cell.tasks.push(task);
+        changedCells.add(`${rowIdx}-${colIdx}`);
+      };
+
+      tasksToPlace.forEach((task) => {
+        const peopleNeeded = task.personCount && task.personCount > 0 ? task.personCount : 1;
+        const estimatedHours = parseEstimatedHours(task.estimatedTime);
+        const shiftsPerPerson = Math.max(1, Math.ceil(estimatedHours / DEFAULT_SHIFT_HOURS));
+        const totalAssignments = peopleNeeded * shiftsPerPerson;
+
+        const alreadyAssigned = scheduleData.cells.reduce((count, row) => {
+          return (
+            count +
+            row.reduce(
+              (rowCount, cell) =>
+                rowCount +
+                cell.tasks.filter((assigned) => assigned.id === task.id).length,
+              0
+            )
+          );
+        }, 0);
+        let remaining = Math.max(0, totalAssignments - alreadyAssigned);
+        if (!remaining) return;
+
+        const allowedSlotIndexes = (task.timeSlots || [])
+          .map((slotLabel) => slotLabelMap.get(slotLabel.toLowerCase()))
+          .filter(Boolean)
+          .map((entry) => entry?.index as number);
+        const slotIndexes =
+          allowedSlotIndexes.length > 0
+            ? Array.from(new Set(allowedSlotIndexes))
+            : scheduleData.slots.map((_slot, index) => index);
+
+        while (remaining > 0) {
+          let best: { row: number; col: number; score: number } | null = null;
+          scheduleData.people.forEach((_person, rowIdx) => {
+            slotIndexes.forEach((colIdx) => {
+              const cell = nextCells[rowIdx]?.[colIdx];
+              if (!cell) return;
+              const score = cell.tasks.length;
+              if (!best || score < best.score) {
+                best = { row: rowIdx, col: colIdx, score };
+              }
+            });
+          });
+
+          if (!best) break;
+          addTaskToCell(best.row, best.col, { id: task.id, name: task.name });
+          remaining -= 1;
+        }
+      });
+
+      setScheduleData({ ...scheduleData, cells: nextCells });
+
+      await Promise.all(
+        Array.from(changedCells).map(async (key) => {
+          const [rowStr, colStr] = key.split("-");
+          const rowIdx = Number(rowStr);
+          const colIdx = Number(colStr);
+          const person = scheduleData.people[rowIdx];
+          const slot = scheduleData.slots[colIdx];
+          if (!person || !slot) return;
+          const cell = nextCells[rowIdx]?.[colIdx];
+          if (!cell) return;
+          await persistCell(person, slot.id, cell);
+        })
+      );
+
+      setScheduleNote("Auto-generated schedule updates were applied. Review and publish when ready.");
+    } catch (err) {
+      console.error("Auto-generate failed", err);
+      setScheduleNote("Auto-generate failed. Please try again.");
+    } finally {
+      setAutoGenerating(false);
+    }
+  };
+
   if (!authorized) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10 text-center text-sm text-[#7a7f54]">
@@ -1333,6 +1465,14 @@ export default function AdminScheduleEditorPage() {
               className="rounded-md bg-[#8fae4c] px-4 py-2 font-semibold uppercase tracking-[0.08em] text-[#f9f9ec] shadow-sm transition hover:bg-[#7e9c44] disabled:opacity-60"
             >
               Publish
+            </button>
+            <button
+              type="button"
+              onClick={autoGenerateSchedule}
+              disabled={autoGenerating || !scheduleData}
+              className="rounded-md border border-[#d0c9a4] bg-white px-4 py-2 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8] disabled:opacity-60"
+            >
+              {autoGenerating ? "Auto-generating…" : "Auto-generate"}
             </button>
             <Link
               href="/hub/admin"
