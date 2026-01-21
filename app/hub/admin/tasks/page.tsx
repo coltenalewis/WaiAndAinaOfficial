@@ -425,7 +425,7 @@ export default function TaskEditorPage() {
 
     try {
       if (editing?.id) {
-        await fetch("/api/tasks", {
+        const res = await fetch("/api/tasks", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -436,13 +436,21 @@ export default function TaskEditorPage() {
             ...payload,
           }),
         });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || "Unable to update task.");
+        }
         setMessage("Task updated.");
       } else {
-        await fetch("/api/tasks", {
+        const res = await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || "Unable to create task.");
+        }
         setMessage("Task created.");
       }
       setEditorOpen(false);
