@@ -142,6 +142,15 @@ create table if not exists schedule_cells (
   unique (schedule_id, person_id, shift_id)
 );
 
+create table if not exists schedule_reports (
+  id uuid primary key default gen_random_uuid(),
+  report_date date not null,
+  date_label text not null,
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  created_by text
+);
+
 insert into shifts (label, time_range, order_index)
 values
   ('Breakfast', '10:30-11:30', 1),

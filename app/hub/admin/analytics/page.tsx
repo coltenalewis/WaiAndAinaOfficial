@@ -20,6 +20,14 @@ type TaskStatusCounts = {
   notStarted: number;
   total: number;
 };
+type TaskStatusLookup = Record<string, string>;
+type ReportSummary = {
+  id: string;
+  report_date: string;
+  date_label: string;
+  created_at: string;
+  created_by?: string | null;
+};
 
 function formatLabel(date: Date) {
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -62,6 +70,7 @@ export default function AdminAnalyticsPage() {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(
     formatLabel(new Date())
   );
@@ -72,6 +81,10 @@ export default function AdminAnalyticsPage() {
   const [statusCounts, setStatusCounts] = useState<TaskStatusCounts | null>(
     null
   );
+  const [taskStatusByName, setTaskStatusByName] = useState<TaskStatusLookup>({});
+  const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [reportCreating, setReportCreating] = useState(false);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -80,6 +93,7 @@ export default function AdminAnalyticsPage() {
       router.replace("/");
       return;
     }
+    setCurrentUserName(session.name);
     const isAdmin = (session.userType || "").toLowerCase() === "admin";
     if (!isAdmin) {
       setMessage("Admin access required.");
@@ -150,6 +164,12 @@ export default function AdminAnalyticsPage() {
           if (res.ok) {
             const json = await res.json();
             const tasks = json.tasks || [];
+            const statusLookup = tasks.reduce((acc: TaskStatusLookup, task: any) => {
+              if (task?.name) {
+                acc[String(task.name).toLowerCase()] = String(task.status || "");
+              }
+              return acc;
+            }, {});
             const counts = tasks.reduce(
               (acc: TaskStatusCounts, task: any) => {
                 const status = (task.status || "").toLowerCase();
@@ -163,9 +183,19 @@ export default function AdminAnalyticsPage() {
             );
             if (!cancelled) {
               setStatusCounts(counts);
+              setTaskStatusByName(statusLookup);
             }
           } else if (!cancelled) {
             setStatusCounts(null);
+            setTaskStatusByName({});
+          }
+        }
+
+        const reportsRes = await fetch("/api/reports?list=1");
+        if (reportsRes.ok) {
+          const reportsJson = await reportsRes.json();
+          if (!cancelled) {
+            setReports(reportsJson.reports || []);
           }
         }
       } catch (err) {
@@ -222,6 +252,75 @@ export default function AdminAnalyticsPage() {
     const max = Math.max(...totals.map((entry) => entry.tasks), 1);
     return { totals, max };
   }, [weekSchedules]);
+
+  const productivityByPerson = useMemo(() => {
+    const summary = new Map<
+      string,
+      { tasks: string[]; outstanding: string[]; shifts: number }
+    >();
+    weekSchedules.forEach((entry) => {
+      if (!entry.schedule) return;
+      entry.schedule.people.forEach((person, rowIdx) => {
+        if (!summary.has(person)) {
+          summary.set(person, { tasks: [], outstanding: [], shifts: 0 });
+        }
+        const row = entry.schedule.cells[rowIdx] || [];
+        row.forEach((cell) => {
+          const tasks = normalizeCellTasks(cell).map((task) => task);
+          const hasTasks = tasks.length > 0;
+          const personSummary = summary.get(person);
+          if (!personSummary) return;
+          if (hasTasks) {
+            personSummary.shifts += 1;
+          }
+          tasks.forEach((taskName) => {
+            personSummary.tasks.push(taskName);
+            const status = taskStatusByName[taskName.toLowerCase()] || "";
+            if (status.toLowerCase() !== "completed") {
+              personSummary.outstanding.push(taskName);
+            }
+          });
+        });
+      });
+    });
+
+    return Array.from(summary.entries()).map(([person, data]) => ({
+      person,
+      totalTasks: data.tasks.length,
+      outstandingTasks: data.outstanding.length,
+      shifts: data.shifts,
+      uniqueTasks: Array.from(new Set(data.tasks)),
+      outstandingUnique: Array.from(new Set(data.outstanding)),
+    }));
+  }, [taskStatusByName, weekSchedules]);
+
+  const handleCreateReport = async () => {
+    if (!selectedDate) return;
+    setReportCreating(true);
+    setReportMessage(null);
+    try {
+      const res = await fetch("/api/reports/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dateLabel: selectedDate, createdBy: currentUserName }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to create report.");
+      }
+      setReportMessage(`Report created for ${selectedDate}.`);
+      const refreshed = await fetch("/api/reports?list=1");
+      if (refreshed.ok) {
+        const refreshedJson = await refreshed.json();
+        setReports(refreshedJson.reports || []);
+      }
+    } catch (err: any) {
+      console.error("Failed to create report", err);
+      setReportMessage(err?.message || "Unable to create report.");
+    } finally {
+      setReportCreating(false);
+    }
+  };
 
   if (!authorized) {
     return (
@@ -388,6 +487,93 @@ export default function AdminAnalyticsPage() {
               </p>
             )}
           </div>
+          <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-[#314123]">Report creator</h2>
+            <p className="text-sm text-[#5f5a3b]">
+              Capture a snapshot of the selected day for record keeping.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCreateReport}
+                disabled={reportCreating || !selectedDate}
+                className="rounded-md bg-[#8fae4c] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white shadow-sm disabled:opacity-60"
+              >
+                {reportCreating ? "Creating…" : "Create report"}
+              </button>
+              {reportMessage && (
+                <span className="text-xs font-semibold text-[#4b5133]">{reportMessage}</span>
+              )}
+            </div>
+            <div className="mt-4 space-y-2 text-xs text-[#4b5133]">
+              {reports.length ? (
+                reports.slice(0, 5).map((report) => (
+                  <Link
+                    key={report.id}
+                    href={`/hub/admin/analytics/reports/${report.id}`}
+                    className="flex items-center justify-between rounded-md border border-[#e2d7b5] bg-white/80 px-3 py-2 hover:bg-[#f9f6e7]"
+                  >
+                    <span>{report.date_label}</span>
+                    <span className="text-[11px] text-[#6a6c4d]">
+                      {new Date(report.created_at).toLocaleDateString()}
+                    </span>
+                  </Link>
+                ))
+              ) : (
+                <span className="text-xs text-[#7a7f54]">No reports saved yet.</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-[#314123]">Productivity by person</h2>
+        <p className="text-sm text-[#5f5a3b]">
+          Weekly task load, outstanding tasks, and shifts with assignments.
+        </p>
+        <div className="mt-4 overflow-auto">
+          <table className="min-w-full border-collapse text-sm">
+            <thead className="bg-[#efe7cf] text-xs uppercase tracking-[0.12em] text-[#6b7247]">
+              <tr>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Person</th>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Shifts</th>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Total tasks</th>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Outstanding</th>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Outstanding tasks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productivityByPerson.length ? (
+                productivityByPerson.map((entry) => (
+                  <tr key={entry.person} className="bg-white">
+                    <td className="border border-[#e0d6b8] px-3 py-2 font-semibold text-[#314123]">
+                      {entry.person}
+                    </td>
+                    <td className="border border-[#e0d6b8] px-3 py-2">{entry.shifts}</td>
+                    <td className="border border-[#e0d6b8] px-3 py-2">{entry.totalTasks}</td>
+                    <td className="border border-[#e0d6b8] px-3 py-2">
+                      {entry.outstandingTasks}
+                    </td>
+                    <td className="border border-[#e0d6b8] px-3 py-2 text-xs text-[#4b5133]">
+                      {entry.outstandingUnique.length
+                        ? entry.outstandingUnique.join(", ")
+                        : "—"}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="border border-[#e0d6b8] px-3 py-2 text-sm text-[#7a7f54]"
+                  >
+                    No assignments found for this week.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
