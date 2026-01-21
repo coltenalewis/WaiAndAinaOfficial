@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     if (list) {
       const reports = await supabaseRequest<any[]>("schedule_reports", {
         query: {
-          select: "id,report_date,date_label,created_at,created_by",
+          select: "id,report_date,date_label,report_title,summary,created_at,created_by",
           order: "report_date.desc",
         },
       });
@@ -26,7 +26,10 @@ export async function GET(req: Request) {
 
     if (id) {
       const [report] = await supabaseRequest<any[]>("schedule_reports", {
-        query: { select: "id,report_date,date_label,data,created_at,created_by", id: `eq.${id}` },
+        query: {
+          select: "id,report_date,date_label,report_title,summary,data,created_at,created_by",
+          id: `eq.${id}`,
+        },
       });
       if (!report) {
         return NextResponse.json({ error: "Report not found" }, { status: 404 });
@@ -59,10 +62,14 @@ export async function POST(req: Request) {
     const [report] = await supabaseRequest<any[]>("schedule_reports", {
       method: "POST",
       prefer: "return=representation",
-      query: { select: "id,report_date,date_label,data,created_at,created_by" },
+      query: {
+        select: "id,report_date,date_label,report_title,summary,data,created_at,created_by",
+      },
       body: {
         report_date: reportDate,
         date_label: dateLabel,
+        report_title: data?.reportTitle || null,
+        summary: data?.summary || {},
         data,
         created_by: createdBy || null,
       },

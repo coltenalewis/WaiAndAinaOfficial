@@ -134,3 +134,19 @@ body {
   min-height: -webkit-fill-available;
   background-color: var(--background);
 }
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .print-hidden {
+    display: none !important;
+  }
+
+  .print-page {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+}

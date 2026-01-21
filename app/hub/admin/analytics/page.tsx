@@ -25,6 +25,11 @@ type ReportSummary = {
   id: string;
   report_date: string;
   date_label: string;
+  report_title?: string | null;
+  summary?: {
+    reportTitle?: string;
+    totalTasks?: number;
+  } | null;
   created_at: string;
   created_by?: string | null;
 };
@@ -512,9 +517,14 @@ export default function AdminAnalyticsPage() {
                   <Link
                     key={report.id}
                     href={`/hub/admin/analytics/reports/${report.id}`}
-                    className="flex items-center justify-between rounded-md border border-[#e2d7b5] bg-white/80 px-3 py-2 hover:bg-[#f9f6e7]"
+                    className="flex items-center justify-between gap-2 rounded-md border border-[#e2d7b5] bg-white/80 px-3 py-2 hover:bg-[#f9f6e7]"
                   >
-                    <span>{report.date_label}</span>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-[#314123]">
+                        {report.report_title || "Schedule Report"}
+                      </span>
+                      <span className="text-[11px] text-[#6a6c4d]">{report.date_label}</span>
+                    </div>
                     <span className="text-[11px] text-[#6a6c4d]">
                       {new Date(report.created_at).toLocaleDateString()}
                     </span>

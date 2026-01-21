@@ -107,14 +107,29 @@ export async function POST(req: Request) {
         row.map((cell: any) => normalizeCellNote(cell)).filter(Boolean)
       ),
     };
+    const totalTasks = shiftSummary.reduce((sum, entry) => sum + entry.taskCount, 0);
+    const totalNotes = payload.notes.length;
+    const reportTitle = "Daily Operations Report";
+    const summary = {
+      reportTitle,
+      scheduleDate: schedule.scheduleDate || label,
+      peopleCount: schedule.people.length,
+      shiftsCount: schedule.slots.length,
+      totalTasks,
+      totalNotes,
+    };
 
     const [report] = await supabaseRequest<any[]>("schedule_reports", {
       method: "POST",
       prefer: "return=representation",
-      query: { select: "id,report_date,date_label,created_at,created_by,data" },
+      query: {
+        select: "id,report_date,date_label,report_title,summary,created_at,created_by,data",
+      },
       body: {
         report_date: reportDate,
         date_label: label,
+        report_title: reportTitle,
+        summary,
         data: payload,
         created_by: createdBy || null,
       },
