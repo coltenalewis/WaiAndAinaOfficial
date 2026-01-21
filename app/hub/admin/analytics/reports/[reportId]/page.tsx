@@ -365,62 +365,6 @@ export default function AnalyticsReportPage() {
           </div>
         </div>
 
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold text-[#314123]">People summary</h3>
-          <div className="mt-4 space-y-3">
-            {(report.data.peopleSummary || []).map((person) => (
-              <div
-                key={person.person}
-                className="rounded-xl border border-[#e0d6b8] bg-white px-4 py-3"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[#28321d]">{person.person}</span>
-                  <span className="text-xs text-[#6a6c4d]">
-                    {person.taskCount} tasks
-                  </span>
-                </div>
-                {person.tasks.length > 0 && (
-                  <p className="mt-2 text-xs text-[#4b5133] leading-relaxed">
-                    {person.tasks.map((task) => task.name).join(", ")}
-                  </p>
-                )}
-                {person.notes.length > 0 && (
-                  <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-[#4b5133]">
-                    {person.notes.map((note, idx) => (
-                      <li key={`${person.person}-note-${idx}`}>{note}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold text-[#314123]">Shift summary</h3>
-          <div className="mt-4 space-y-3">
-            {(report.data.shiftSummary || []).map((shift) => (
-              <div
-                key={shift.slot}
-                className="rounded-xl border border-[#e0d6b8] bg-white px-4 py-3"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[#28321d]">{shift.slot}</span>
-                  <span className="text-xs text-[#6a6c4d]">{shift.taskCount} tasks</span>
-                </div>
-                {shift.timeRange && (
-                  <p className="mt-1 text-xs text-[#6a6c4d]">{shift.timeRange}</p>
-                )}
-                {shift.tasks.length > 0 && (
-                  <p className="mt-2 text-xs text-[#4b5133] leading-relaxed">
-                    {shift.tasks.map((task) => task.name).join(", ")}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
         {(report.data.customTables || []).length > 0 && (
           <div className="mt-8">
             <h3 className="text-lg font-semibold text-[#314123]">Custom tables</h3>
@@ -480,51 +424,64 @@ export default function AnalyticsReportPage() {
 
         {(report.data.taskDetails || []).length > 0 && (
           <div className="mt-8">
-            <h3 className="text-lg font-semibold text-[#314123]">Tasks & descriptions</h3>
+            <h3 className="text-lg font-semibold text-[#314123]">Task bank</h3>
             <p className="mt-1 text-sm text-[#5f5a3b]">
               Detailed task list captured for record keeping.
             </p>
-            <div className="mt-4 space-y-3">
-              {[...(report.data.taskDetails || [])]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((task) => (
-                  <div
-                    key={task.id}
-                    className="rounded-xl border border-[#e0d6b8] bg-white px-4 py-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold text-[#28321d]">{task.name}</span>
-                      <span className="text-[11px] uppercase tracking-[0.12em] text-[#7a7f54]">
-                        {task.status || "status n/a"}
-                      </span>
-                    </div>
-                    {task.description && (
-                      <p className="mt-2 text-sm text-[#4b5133]">{task.description}</p>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#6a6c4d]">
-                      {task.priority && (
-                        <span className="rounded-full bg-[#f3f0e1] px-2 py-1">
-                          Priority: {task.priority}
-                        </span>
-                      )}
-                      {task.estimatedTime !== null && task.estimatedTime !== undefined && (
-                        <span className="rounded-full bg-[#f3f0e1] px-2 py-1">
-                          Est. time: {task.estimatedTime} hrs
-                        </span>
-                      )}
-                      {task.personCount !== null && task.personCount !== undefined && (
-                        <span className="rounded-full bg-[#f3f0e1] px-2 py-1">
-                          People: {task.personCount}
-                        </span>
-                      )}
-                      {task.timeSlots && task.timeSlots.length > 0 && (
-                        <span className="rounded-full bg-[#f3f0e1] px-2 py-1">
-                          Slots: {task.timeSlots.join(", ")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+            <div className="mt-4 overflow-auto rounded-2xl border border-[#e0d6b8] bg-white">
+              <table className="min-w-full border-collapse text-[11px]">
+                <thead className="bg-[#f5f1df] text-[10px] uppercase tracking-[0.14em] text-[#6b7247]">
+                  <tr>
+                    <th className="border border-[#e0d6b8] px-3 py-2 text-left">Task</th>
+                    <th className="border border-[#e0d6b8] px-3 py-2 text-left">Description</th>
+                    <th className="border border-[#e0d6b8] px-3 py-2 text-left">Status</th>
+                    <th className="border border-[#e0d6b8] px-3 py-2 text-left">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...(report.data.taskDetails || [])]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((task) => (
+                      <tr key={task.id} className="align-top">
+                        <td className="border border-[#e0d6b8] px-3 py-2 font-semibold text-[#28321d]">
+                          {task.name}
+                        </td>
+                        <td className="border border-[#e0d6b8] px-3 py-2 text-[#4b5133]">
+                          {task.description || "—"}
+                        </td>
+                        <td className="border border-[#e0d6b8] px-3 py-2 text-[#4b5133]">
+                          <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#6b6f52]">
+                            {task.status || "n/a"}
+                          </span>
+                        </td>
+                        <td className="border border-[#e0d6b8] px-3 py-2 text-[#4b5133]">
+                          <div className="flex flex-wrap gap-2">
+                            {task.priority && (
+                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px]">
+                                Priority: {task.priority}
+                              </span>
+                            )}
+                            {task.estimatedTime !== null && task.estimatedTime !== undefined && (
+                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px]">
+                                Est. time: {task.estimatedTime} hrs
+                              </span>
+                            )}
+                            {task.personCount !== null && task.personCount !== undefined && (
+                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px]">
+                                People: {task.personCount}
+                              </span>
+                            )}
+                            {task.timeSlots && task.timeSlots.length > 0 && (
+                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px]">
+                                Slots: {task.timeSlots.join(", ")}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
