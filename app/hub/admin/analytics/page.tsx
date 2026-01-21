@@ -87,6 +87,7 @@ export default function AdminAnalyticsPage() {
     null
   );
   const [taskStatusByName, setTaskStatusByName] = useState<TaskStatusLookup>({});
+  const [weekTasks, setWeekTasks] = useState<any[]>([]);
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [reportCreating, setReportCreating] = useState(false);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
@@ -189,10 +190,12 @@ export default function AdminAnalyticsPage() {
             if (!cancelled) {
               setStatusCounts(counts);
               setTaskStatusByName(statusLookup);
+              setWeekTasks(tasks);
             }
           } else if (!cancelled) {
             setStatusCounts(null);
             setTaskStatusByName({});
+            setWeekTasks([]);
           }
         }
 
@@ -299,6 +302,72 @@ export default function AdminAnalyticsPage() {
       outstandingUnique: Array.from(new Set(data.outstanding)),
     }));
   }, [taskStatusByName, weekSchedules]);
+
+  const outstandingTasks = useMemo(() => {
+    const map = new Map<
+      string,
+      { name: string; count: number; priority: string; occurrenceDate?: string | null }
+    >();
+    weekTasks.forEach((task) => {
+      const name = String(task?.name || "").trim();
+      if (!name) return;
+      const status = String(task?.status || "").toLowerCase();
+      if (status === "completed") return;
+      if (!map.has(name)) {
+        map.set(name, {
+          name,
+          count: 0,
+          priority: String(task?.priority || ""),
+          occurrenceDate: task?.occurrence_date || null,
+        });
+      }
+      const entry = map.get(name);
+      if (entry) {
+        entry.count += 1;
+        if (!entry.occurrenceDate && task?.occurrence_date) {
+          entry.occurrenceDate = task.occurrence_date;
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [weekTasks]);
+
+  const priorityBreakdown = useMemo(() => {
+    const counts = { high: 0, medium: 0, low: 0, other: 0 };
+    outstandingTasks.forEach((task) => {
+      const priority = task.priority.toLowerCase();
+      if (priority === "high") counts.high += 1;
+      else if (priority === "medium") counts.medium += 1;
+      else if (priority === "low") counts.low += 1;
+      else counts.other += 1;
+    });
+    return counts;
+  }, [outstandingTasks]);
+
+  const workloadSignals = useMemo(() => {
+    let totalCells = 0;
+    let filledCells = 0;
+    let assignments = 0;
+    weekSchedules.forEach((entry) => {
+      const schedule = entry.schedule;
+      if (!schedule) return;
+      totalCells += schedule.people.length * schedule.slots.length;
+      schedule.cells.forEach((row) => {
+        row.forEach((cell) => {
+          const tasks = normalizeCellTasks(cell);
+          assignments += tasks.length;
+          if (tasks.length > 0) filledCells += 1;
+        });
+      });
+    });
+    return {
+      totalCells,
+      filledCells,
+      assignments,
+      fillRate: totalCells ? filledCells / totalCells : 0,
+      avgTasksPerFilled: filledCells ? assignments / filledCells : 0,
+    };
+  }, [weekSchedules]);
 
   const handleCreateReport = async () => {
     if (!selectedDate) return;
@@ -462,29 +531,51 @@ export default function AdminAnalyticsPage() {
             <h2 className="text-lg font-semibold text-[#314123]">Status mix</h2>
             <p className="text-sm text-[#5f5a3b]">Tasks by status for the week.</p>
             {statusCounts ? (
-              <div className="mt-4 space-y-3 text-xs text-[#4b5133]">
-                <div className="flex items-center justify-between">
-                  <span>Completed</span>
-                  <span className="font-semibold text-emerald-700">{statusCounts.completed}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>In progress</span>
-                  <span className="font-semibold text-sky-700">{statusCounts.inProgress}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Not started</span>
-                  <span className="font-semibold text-amber-700">{statusCounts.notStarted}</span>
-                </div>
-                <div className="mt-2 rounded-full bg-[#f1edd8]">
+              <div className="mt-4 grid gap-4 text-xs text-[#4b5133] sm:grid-cols-[120px_1fr]">
+                <div className="flex items-center justify-center">
                   <div
-                    className="h-2 rounded-full bg-emerald-500"
+                    className="h-24 w-24 rounded-full"
                     style={{
-                      width: `${(statusCounts.completed / Math.max(statusCounts.total, 1)) * 100}%`,
+                      background: `conic-gradient(#2f855a 0 ${Math.round(
+                        (statusCounts.completed / Math.max(statusCounts.total, 1)) * 360
+                      )}deg, #0284c7 0 ${Math.round(
+                        ((statusCounts.completed + statusCounts.inProgress) /
+                          Math.max(statusCounts.total, 1)) *
+                          360
+                      )}deg, #f59e0b 0 360deg)`,
                     }}
                   />
                 </div>
-                <div className="text-[11px] text-[#6a6c4d]">
-                  {statusCounts.total} total tasks this week.
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span>Completed</span>
+                    <span className="font-semibold text-emerald-700">
+                      {statusCounts.completed}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>In progress</span>
+                    <span className="font-semibold text-sky-700">
+                      {statusCounts.inProgress}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Not started</span>
+                    <span className="font-semibold text-amber-700">
+                      {statusCounts.notStarted}
+                    </span>
+                  </div>
+                  <div className="mt-2 rounded-full bg-[#f1edd8]">
+                    <div
+                      className="h-2 rounded-full bg-emerald-500"
+                      style={{
+                        width: `${(statusCounts.completed / Math.max(statusCounts.total, 1)) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-[#6a6c4d]">
+                    {statusCounts.total} total tasks this week.
+                  </div>
                 </div>
               </div>
             ) : (
@@ -492,6 +583,79 @@ export default function AdminAnalyticsPage() {
                 Status data unavailable.
               </p>
             )}
+          </div>
+          <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-[#314123]">Productivity signals</h2>
+            <p className="text-sm text-[#5f5a3b]">Utilization and throughput highlights.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-[#e2d7b5] bg-white/90 px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-[#7a7f54]">
+                  Completion rate
+                </div>
+                <div className="text-lg font-semibold text-[#314123]">
+                  {statusCounts
+                    ? `${Math.round(
+                        (statusCounts.completed / Math.max(statusCounts.total, 1)) * 100
+                      )}%`
+                    : "—"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-[#e2d7b5] bg-white/90 px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-[#7a7f54]">
+                  Avg tasks per filled shift
+                </div>
+                <div className="text-lg font-semibold text-[#314123]">
+                  {workloadSignals.avgTasksPerFilled.toFixed(1)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-[#e2d7b5] bg-white/90 px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-[#7a7f54]">
+                  Filled shift rate
+                </div>
+                <div className="text-lg font-semibold text-[#314123]">
+                  {Math.round(workloadSignals.fillRate * 100)}%
+                </div>
+              </div>
+              <div className="rounded-xl border border-[#e2d7b5] bg-white/90 px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-[#7a7f54]">
+                  Assignments logged
+                </div>
+                <div className="text-lg font-semibold text-[#314123]">
+                  {workloadSignals.assignments}
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">
+                Outstanding task priority mix
+              </p>
+              <div className="mt-2 space-y-2 text-[11px] text-[#4b5133]">
+                {[
+                  { label: "High", value: priorityBreakdown.high, color: "bg-rose-500" },
+                  { label: "Medium", value: priorityBreakdown.medium, color: "bg-amber-500" },
+                  { label: "Low", value: priorityBreakdown.low, color: "bg-emerald-500" },
+                  { label: "Other", value: priorityBreakdown.other, color: "bg-slate-400" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-3">
+                    <div className="w-16 text-[11px]">{item.label}</div>
+                    <div className="flex-1 rounded-full bg-[#f1edd8]">
+                      <div
+                        className={`h-2 rounded-full ${item.color}`}
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (item.value / Math.max(outstandingTasks.length, 1)) * 100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="w-6 text-right text-[11px] font-semibold">
+                      {item.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-[#314123]">Report creator</h2>
@@ -535,6 +699,52 @@ export default function AdminAnalyticsPage() {
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-[#314123]">Outstanding tasks</h2>
+        <p className="text-sm text-[#5f5a3b]">
+          Active tasks that still need completion this week.
+        </p>
+        <div className="mt-4 overflow-auto">
+          <table className="min-w-full border-collapse text-sm">
+            <thead className="bg-[#efe7cf] text-xs uppercase tracking-[0.12em] text-[#6b7247]">
+              <tr>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Task</th>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Priority</th>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Occurrences</th>
+                <th className="border border-[#e0d6b8] px-3 py-2 text-left">Next date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outstandingTasks.length ? (
+                outstandingTasks.slice(0, 15).map((task) => (
+                  <tr key={task.name} className="bg-white">
+                    <td className="border border-[#e0d6b8] px-3 py-2 font-semibold text-[#314123]">
+                      {task.name}
+                    </td>
+                    <td className="border border-[#e0d6b8] px-3 py-2">
+                      {task.priority || "—"}
+                    </td>
+                    <td className="border border-[#e0d6b8] px-3 py-2">{task.count}</td>
+                    <td className="border border-[#e0d6b8] px-3 py-2 text-xs text-[#4b5133]">
+                      {task.occurrenceDate || "—"}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="border border-[#e0d6b8] px-3 py-2 text-sm text-[#7a7f54]"
+                  >
+                    No outstanding tasks found for this week.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

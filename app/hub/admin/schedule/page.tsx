@@ -195,7 +195,6 @@ export default function AdminScheduleEditorPage() {
   const [taskDetailLoading, setTaskDetailLoading] = useState(false);
   const [taskEditSaving, setTaskEditSaving] = useState(false);
   const [taskEditMessage, setTaskEditMessage] = useState<string | null>(null);
-  const [saveStatusOpen, setSaveStatusOpen] = useState(true);
   const [mobileDockOpen, setMobileDockOpen] = useState(false);
   const [mobileDockTab, setMobileDockTab] = useState<"recurring" | "oneOff">("recurring");
   const [desktopDockOpen, setDesktopDockOpen] = useState(true);
@@ -204,6 +203,9 @@ export default function AdminScheduleEditorPage() {
   const [blackoutRangeStart, setBlackoutRangeStart] = useState("");
   const [blackoutRangeEnd, setBlackoutRangeEnd] = useState("");
   const [blackoutApplying, setBlackoutApplying] = useState(false);
+  const [recurringDockExpanded, setRecurringDockExpanded] = useState(false);
+  const [oneOffDockExpanded, setOneOffDockExpanded] = useState(false);
+  const [showPastIncomplete, setShowPastIncomplete] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoMessage, setPhotoMessage] = useState<string | null>(null);
   const [saveLog, setSaveLog] = useState<{
@@ -552,16 +554,21 @@ export default function AdminScheduleEditorPage() {
   ]);
 
   const filteredOneOffTasks = useMemo(() => {
+    const selectedIso = selectedDate ? formatLabelToInput(selectedDate) : "";
     const filtered = oneOffTasks.filter((task) => {
       const matchesSearch = task.name.toLowerCase().includes(taskSearch.toLowerCase());
       const matchesType = taskTypeFilter
         ? (task.type || "").toLowerCase() === taskTypeFilter.toLowerCase()
         : true;
-      return matchesSearch && matchesType;
+      const occurrence = task.occurrenceDate || "";
+      const isPast = selectedIso && occurrence ? occurrence < selectedIso : false;
+      const isCompleted = (task.status || "").toLowerCase() === "completed";
+      const allowPast = !isPast || (showPastIncomplete && !isCompleted);
+      return matchesSearch && matchesType && allowPast;
     });
 
     return filtered.sort(sortTasks);
-  }, [oneOffTasks, taskSearch, taskTypeFilter, sortTasks]);
+  }, [oneOffTasks, selectedDate, showPastIncomplete, taskSearch, taskTypeFilter, sortTasks]);
 
   const dayOverview = useMemo(() => {
     if (!scheduleData) return null;
@@ -1870,62 +1877,6 @@ export default function AdminScheduleEditorPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-[#d0c9a4] bg-white/80 px-4 py-3 text-xs text-[#4b5133] shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">
-            Save status
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-[#7a7f54]">
-              {saveLog.lastAttempt ? `Last attempt ${saveLog.lastAttempt}` : "No changes yet"}
-            </span>
-            <button
-              type="button"
-              onClick={() => setSaveStatusOpen((prev) => !prev)}
-              className="rounded-full border border-[#d0c9a4] bg-white px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.1em] text-[#4b5133]"
-            >
-              {saveStatusOpen ? "Hide" : "Show"}
-            </button>
-          </div>
-        </div>
-        {saveStatusOpen && (
-          <>
-            <div className="mt-2 grid gap-2 text-[11px] md:grid-cols-2">
-              <div>
-                <span className="font-semibold">Mode:</span> {scheduleMode}
-              </div>
-              <div>
-                <span className="font-semibold">Selected date:</span>{" "}
-                {selectedDate || "Not set"}
-              </div>
-              <div>
-                <span className="font-semibold">Loaded schedule date:</span>{" "}
-                {scheduleData?.scheduleDate || "Not loaded"}
-              </div>
-              <div>
-                <span className="font-semibold">Pending saves:</span> {pendingCells.size}
-              </div>
-            </div>
-            <div className="mt-2 rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] px-3 py-2 text-[11px]">
-              {saveLog.status === "saving" && "Saving to Supabase…"}
-              {saveLog.status === "success" && saveLog.message}
-              {saveLog.status === "error" && (
-                <span className="font-semibold text-[#8b4b3c]">
-                  Save failed: {saveLog.message}
-                </span>
-              )}
-              {saveLog.status === "idle" && "Waiting for changes."}
-              {saveLog.payload && (
-                <div className="mt-1 text-[10px] text-[#6b6d4b]">
-                  Person: {saveLog.payload.person} • Shift: {saveLog.payload.slotId} • Date:{" "}
-                  {saveLog.payload.dateLabel || "n/a"}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
       <div
         className={`flex min-w-0 flex-1 flex-col gap-4 px-4 py-4 pb-24 lg:flex-row lg:pb-32 ${
           canvasExpanded ? "lg:min-h-[calc(100vh-12rem)]" : ""
@@ -2353,9 +2304,18 @@ export default function AdminScheduleEditorPage() {
                 <div className="rounded-2xl border border-[#d0c9a4] bg-white/90 shadow-lg backdrop-blur">
                   <div className="flex items-center justify-between gap-2 rounded-t-2xl bg-[#f0f4de] px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#4b5133]">
                     <span>Recurring task dock</span>
-                    <span className="rounded-md border border-[#d0c9a4] bg-white px-2 py-[2px] text-[10px] font-semibold text-[#4b5133]">
-                      {selectedDate || "Pick a date"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md border border-[#d0c9a4] bg-white px-2 py-[2px] text-[10px] font-semibold text-[#4b5133]">
+                        {selectedDate || "Pick a date"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRecurringDockExpanded((prev) => !prev)}
+                        className="rounded-md border border-[#d0c9a4] bg-white px-2 py-[2px] text-[10px] font-semibold text-[#4b5133]"
+                      >
+                        {recurringDockExpanded ? "Collapse list" : "Expand list"}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2 p-3 text-sm">
                     <div className="grid gap-2 md:grid-cols-2">
@@ -2403,6 +2363,15 @@ export default function AdminScheduleEditorPage() {
                             className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
                           />
                           Show all recurring
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={showPastIncomplete}
+                            onChange={(e) => setShowPastIncomplete(e.target.checked)}
+                            className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                          />
+                          Show past incomplete one-offs
                         </label>
                         <label className="flex items-center gap-2">
                           <input
@@ -2487,7 +2456,11 @@ export default function AdminScheduleEditorPage() {
                       </div>
                     </div>
 
-                    <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                    <div
+                      className={`space-y-2 pr-1 ${
+                        recurringDockExpanded ? "max-h-[420px] overflow-y-auto" : "max-h-48 overflow-y-auto"
+                      }`}
+                    >
                       {filteredRecurringTasks.map((task) => {
                         const taskHandled = isTaskHandled(task);
                         return (
@@ -2537,8 +2510,15 @@ export default function AdminScheduleEditorPage() {
                 </div>
 
                 <div className="rounded-2xl border border-[#d0c9a4] bg-white/90 shadow-lg backdrop-blur">
-                  <div className="rounded-t-2xl bg-[#f0f4de] px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#4b5133]">
-                    One-off task dock
+                  <div className="flex items-center justify-between rounded-t-2xl bg-[#f0f4de] px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#4b5133]">
+                    <span>One-off task dock</span>
+                    <button
+                      type="button"
+                      onClick={() => setOneOffDockExpanded((prev) => !prev)}
+                      className="rounded-md border border-[#d0c9a4] bg-white px-2 py-[2px] text-[10px] font-semibold text-[#4b5133]"
+                    >
+                      {oneOffDockExpanded ? "Collapse list" : "Expand list"}
+                    </button>
                   </div>
                   <div className="space-y-2 p-3 text-sm">
                     <div className="rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] p-2">
@@ -2573,7 +2553,11 @@ export default function AdminScheduleEditorPage() {
                       </div>
                     </div>
 
-                    <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                    <div
+                      className={`space-y-2 pr-1 ${
+                        oneOffDockExpanded ? "max-h-[420px] overflow-y-auto" : "max-h-48 overflow-y-auto"
+                      }`}
+                    >
                       {filteredOneOffTasks.map((task) => {
                         const taskHandled = isTaskHandled(task);
                         return (
@@ -2851,6 +2835,15 @@ export default function AdminScheduleEditorPage() {
                           className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
                         />
                         Show all recurring
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={showPastIncomplete}
+                          onChange={(e) => setShowPastIncomplete(e.target.checked)}
+                          className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                        />
+                        Show past incomplete one-offs
                       </label>
                       <label className="flex items-center gap-2">
                         <input
