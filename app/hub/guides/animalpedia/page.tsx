@@ -141,6 +141,25 @@ export default function AnimalpediaPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [currentUserType, setCurrentUserType] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [draft, setDraft] = useState({
+    id: "",
+    name: "",
+    summary: "",
+    dailyCareNotes: "",
+    birthday: "",
+    ageLabel: "",
+    ageMonths: "",
+    milkingMethod: "",
+    getMilked: false,
+    breed: "",
+    behaviors: "",
+    typeName: "",
+    genderName: "",
+    stats: "",
+  });
 
   useEffect(() => {
     const session = loadSession();
@@ -257,6 +276,28 @@ export default function AnimalpediaPage() {
     setActiveAnimal(animal);
     setPhotoIndex(0);
     setUploadError(null);
+    setSaveError(null);
+    setEditing(false);
+    setDraft({
+      id: animal.id,
+      name: animal.name,
+      summary: animal.summary || "",
+      dailyCareNotes: animal.dailyCareNotes || "",
+      birthday: animal.birthday || "",
+      ageLabel: animal.ageLabel || "",
+      ageMonths: animal.ageMonths?.toString() || "",
+      milkingMethod: animal.milkingMethod || "",
+      getMilked: Boolean(animal.getMilked),
+      breed: animal.breed || "",
+      behaviors: animal.behaviors.join(", "),
+      typeName: animal.type?.name || "",
+      genderName: animal.gender?.name || "",
+      stats: animal.stats
+        ? Object.entries(animal.stats)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join("\n")
+        : "",
+    });
   };
 
   const nextPhoto = () => {
@@ -320,6 +361,126 @@ export default function AnimalpediaPage() {
       .filter((entry) => entry.value.trim());
   }, [activeAnimal]);
 
+  const handleNewAnimal = () => {
+    setActiveAnimal({
+      id: "",
+      name: "",
+      summary: "",
+      dailyCareNotes: "",
+      birthday: "",
+      ageLabel: "",
+      ageMonths: null,
+      milkingMethod: "",
+      getMilked: false,
+      type: undefined,
+      behaviors: [],
+      breed: "",
+      gender: undefined,
+      photos: [],
+      stats: {},
+    });
+    setEditing(true);
+    setSaveError(null);
+    setDraft({
+      id: "",
+      name: "",
+      summary: "",
+      dailyCareNotes: "",
+      birthday: "",
+      ageLabel: "",
+      ageMonths: "",
+      milkingMethod: "",
+      getMilked: false,
+      breed: "",
+      behaviors: "",
+      typeName: "",
+      genderName: "",
+      stats: "",
+    });
+  };
+
+  const parseStats = (raw: string) => {
+    return raw
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .reduce<Record<string, string>>((acc, line) => {
+        const [key, ...rest] = line.split(":");
+        if (!key) return acc;
+        const value = rest.join(":").trim();
+        if (value) {
+          acc[key.trim()] = value;
+        }
+        return acc;
+      }, {});
+  };
+
+  const handleSaveAnimal = async () => {
+    if (!draft.name.trim()) {
+      setSaveError("Name is required.");
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = {
+        id: draft.id || undefined,
+        name: draft.name.trim(),
+        summary: draft.summary,
+        dailyCareNotes: draft.dailyCareNotes,
+        birthday: draft.birthday || null,
+        ageLabel: draft.ageLabel,
+        ageMonths: draft.ageMonths ? Number(draft.ageMonths) : null,
+        milkingMethod: draft.milkingMethod,
+        getMilked: draft.getMilked,
+        breed: draft.breed,
+        behaviors: draft.behaviors
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+        typeName: draft.typeName,
+        genderName: draft.genderName,
+        stats: parseStats(draft.stats),
+      };
+      const res = await fetch("/api/animals", {
+        method: draft.id ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Unable to save animal.");
+      }
+      const saved = json.animal as Animal;
+      setAnimals((prev) => {
+        const existing = prev.find((item) => item.id === saved.id);
+        if (existing) {
+          return prev.map((item) => (item.id === saved.id ? saved : item));
+        }
+        return [saved, ...prev];
+      });
+      setFilters((prev) => {
+        const nextTypes = saved.type?.name
+          ? prev.types.some((type) => type.name === saved.type?.name)
+            ? prev.types
+            : [...prev.types, saved.type]
+          : prev.types;
+        const nextGenders = saved.gender?.name
+          ? prev.genders.some((gender) => gender.name === saved.gender?.name)
+            ? prev.genders
+            : [...prev.genders, saved.gender]
+          : prev.genders;
+        return { types: nextTypes, genders: nextGenders };
+      });
+      setActiveAnimal(saved);
+      setEditing(false);
+    } catch (err: any) {
+      setSaveError(err?.message || "Unable to save animal.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="rounded-xl bg-[#a0b764] text-white px-4 py-4 shadow">
@@ -329,6 +490,15 @@ export default function AnimalpediaPage() {
             <h1 className="text-3xl font-semibold">Animalpedia</h1>
             <p className="text-sm text-white/85">Browse care notes, favorites, and quick facts for every animal.</p>
           </div>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleNewAnimal}
+              className="mt-3 inline-flex items-center justify-center rounded-full border border-white/60 bg-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-white/25 sm:mt-0"
+            >
+              New animal
+            </button>
+          )}
         </div>
       </header>
 
@@ -540,6 +710,199 @@ export default function AnimalpediaPage() {
                 </div>
 
                 {isAdmin && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditing((prev) => !prev)}
+                      className="rounded-full border border-[#d0c9a4] bg-white px-3 py-1 text-xs font-semibold text-[#5a5436] shadow-sm"
+                    >
+                      {editing ? "View details" : "Edit animal"}
+                    </button>
+                    {saveError && (
+                      <span className="text-xs font-semibold text-red-700">{saveError}</span>
+                    )}
+                  </div>
+                )}
+
+                {editing ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <label className="flex flex-col gap-1">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Name</span>
+                        <input
+                          type="text"
+                          value={draft.name}
+                          onChange={(event) =>
+                            setDraft((prev) => ({ ...prev, name: event.target.value }))
+                          }
+                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Type</span>
+                        <input
+                          type="text"
+                          value={draft.typeName}
+                          onChange={(event) =>
+                            setDraft((prev) => ({ ...prev, typeName: event.target.value }))
+                          }
+                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Gender</span>
+                        <input
+                          type="text"
+                          value={draft.genderName}
+                          onChange={(event) =>
+                            setDraft((prev) => ({ ...prev, genderName: event.target.value }))
+                          }
+                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Breed</span>
+                        <input
+                          type="text"
+                          value={draft.breed}
+                          onChange={(event) =>
+                            setDraft((prev) => ({ ...prev, breed: event.target.value }))
+                          }
+                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                        />
+                      </label>
+                    </div>
+                    <label className="flex flex-col gap-1 text-xs">
+                      <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Summary</span>
+                      <textarea
+                        value={draft.summary}
+                        onChange={(event) =>
+                          setDraft((prev) => ({ ...prev, summary: event.target.value }))
+                        }
+                        rows={2}
+                        className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs">
+                      <span className="uppercase tracking-[0.16em] text-[#7a7f54]">
+                        Daily care notes
+                      </span>
+                      <textarea
+                        value={draft.dailyCareNotes}
+                        onChange={(event) =>
+                          setDraft((prev) => ({ ...prev, dailyCareNotes: event.target.value }))
+                        }
+                        rows={3}
+                        className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                      />
+                    </label>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <label className="flex flex-col gap-1">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Birthday</span>
+                        <input
+                          type="date"
+                          value={draft.birthday}
+                          onChange={(event) =>
+                            setDraft((prev) => ({ ...prev, birthday: event.target.value }))
+                          }
+                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Age label</span>
+                        <input
+                          type="text"
+                          value={draft.ageLabel}
+                          onChange={(event) =>
+                            setDraft((prev) => ({ ...prev, ageLabel: event.target.value }))
+                          }
+                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">
+                          Age (months)
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={draft.ageMonths}
+                          onChange={(event) =>
+                            setDraft((prev) => ({ ...prev, ageMonths: event.target.value }))
+                          }
+                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">
+                          Milking method
+                        </span>
+                        <input
+                          type="text"
+                          value={draft.milkingMethod}
+                          onChange={(event) =>
+                            setDraft((prev) => ({ ...prev, milkingMethod: event.target.value }))
+                          }
+                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                        />
+                      </label>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-[#5a5436]">
+                      <input
+                        type="checkbox"
+                        checked={draft.getMilked}
+                        onChange={(event) =>
+                          setDraft((prev) => ({ ...prev, getMilked: event.target.checked }))
+                        }
+                        className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                      />
+                      Gets milked
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs">
+                      <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Behaviors</span>
+                      <input
+                        type="text"
+                        value={draft.behaviors}
+                        onChange={(event) =>
+                          setDraft((prev) => ({ ...prev, behaviors: event.target.value }))
+                        }
+                        placeholder="Friendly, Curious"
+                        className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs">
+                      <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Stats</span>
+                      <textarea
+                        value={draft.stats}
+                        onChange={(event) =>
+                          setDraft((prev) => ({ ...prev, stats: event.target.value }))
+                        }
+                        rows={3}
+                        placeholder="weight_lbs: 120"
+                        className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveAnimal}
+                        disabled={saving}
+                        className="rounded-full bg-[#6f8f3d] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white shadow-sm disabled:opacity-60"
+                      >
+                        {saving ? "Saving…" : "Save animal"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(false)}
+                        className="rounded-full border border-[#d0c9a4] bg-white px-3 py-2 text-xs font-semibold text-[#5a5436]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {isAdmin && (
                   <div className="space-y-2">
                     <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">
                       Photo gallery
@@ -557,12 +920,12 @@ export default function AnimalpediaPage() {
                               event.currentTarget.value = "";
                             }
                           }}
-                          disabled={uploading}
+                          disabled={uploading || !activeAnimal.id}
                         />
                         {uploading ? "Uploading…" : "Upload photo"}
                       </label>
                       <span className="text-[11px] text-[#7a7f54]">
-                        JPG/PNG/WebP up to 300kb.
+                        {activeAnimal.id ? "JPG/PNG/WebP up to 300kb." : "Save animal first."}
                       </span>
                     </div>
                     {uploadError && (
