@@ -201,6 +201,9 @@ export default function AdminScheduleEditorPage() {
   const [desktopDockOpen, setDesktopDockOpen] = useState(true);
   const [canvasExpanded, setCanvasExpanded] = useState(false);
   const [blackoutMode, setBlackoutMode] = useState(false);
+  const [blackoutRangeStart, setBlackoutRangeStart] = useState("");
+  const [blackoutRangeEnd, setBlackoutRangeEnd] = useState("");
+  const [blackoutApplying, setBlackoutApplying] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoMessage, setPhotoMessage] = useState<string | null>(null);
   const [saveLog, setSaveLog] = useState<{
@@ -1192,6 +1195,78 @@ export default function AdminScheduleEditorPage() {
     [findCoord, scheduleData?.scheduleDate, selectedDate]
   );
 
+  const applyBlackoutRange = useCallback(async () => {
+    if (!scheduleData) {
+      setMessage("Load a schedule before applying blackout ranges.");
+      return;
+    }
+    if (!blackoutRangeStart || !blackoutRangeEnd) {
+      setMessage("Select a start and end date for the blackout range.");
+      return;
+    }
+    const startDate = new Date(blackoutRangeStart);
+    const endDate = new Date(blackoutRangeEnd);
+    if (Number.isNaN(startDate.valueOf()) || Number.isNaN(endDate.valueOf())) {
+      setMessage("Blackout range dates are invalid.");
+      return;
+    }
+    if (startDate > endDate) {
+      setMessage("Blackout range start date must be before the end date.");
+      return;
+    }
+
+    const blockedCells: { person: string; slotId: string }[] = [];
+    scheduleData.people.forEach((person, rowIdx) => {
+      scheduleData.slots.forEach((slot, colIdx) => {
+        const cell = scheduleData.cells?.[rowIdx]?.[colIdx];
+        if (cell?.blocked) {
+          blockedCells.push({ person, slotId: slot.id });
+        }
+      });
+    });
+
+    if (!blockedCells.length) {
+      setMessage("No blocked cells found to apply across the range.");
+      return;
+    }
+
+    setBlackoutApplying(true);
+    setMessage(null);
+    try {
+      const dates: string[] = [];
+      const cursor = new Date(startDate);
+      while (cursor <= endDate) {
+        dates.push(cursor.toISOString().slice(0, 10));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      for (const dateLabel of dates) {
+        await Promise.all(
+          blockedCells.map(async (cell) => {
+            await fetch("/api/schedule/update", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                person: cell.person,
+                slotId: cell.slotId,
+                dateLabel,
+                tasks: [],
+                note: "",
+                blocked: true,
+              }),
+            });
+          })
+        );
+      }
+      setMessage("Blackout range applied to all selected dates.");
+    } catch (err) {
+      console.error("Failed to apply blackout range", err);
+      setMessage("Unable to apply blackout range.");
+    } finally {
+      setBlackoutApplying(false);
+    }
+  }, [blackoutRangeEnd, blackoutRangeStart, scheduleData]);
+
   const selectCell = (person: string, slot: Slot) => {
     const coord = findCoord(person, slot.id, scheduleData);
     const current = coord ? scheduleData?.cells?.[coord.row]?.[coord.col] : null;
@@ -1596,7 +1671,7 @@ export default function AdminScheduleEditorPage() {
   return (
     <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#fdfbf4]">
       <div className="border-b border-[#e2d7b5] bg-[#f7f4e6] px-6 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Admin schedule</p>
             <h1 className="text-2xl font-semibold text-[#314123]">{scheduleTitle}</h1>
@@ -1613,59 +1688,63 @@ export default function AdminScheduleEditorPage() {
               <p className="mt-2 text-xs text-[#4b5133]">{scheduleNote}</p>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-[#6a6c4d]">
-            <button
-              type="button"
-              onClick={refreshSchedule}
-              className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8]"
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={publishSchedule}
-              disabled={!selectedDate || scheduleMode !== "page"}
-              className="rounded-md bg-[#8fae4c] px-4 py-2 font-semibold uppercase tracking-[0.08em] text-[#f9f9ec] shadow-sm transition hover:bg-[#7e9c44] disabled:opacity-60"
-            >
-              Publish
-            </button>
-            <button
-              type="button"
-              onClick={autoGenerateSchedule}
-              disabled={autoGenerating || !scheduleData}
-              className="rounded-md border border-[#d0c9a4] bg-white px-4 py-2 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8] disabled:opacity-60"
-            >
-              {autoGenerating ? "Auto-generating…" : "Auto-generate"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setBlackoutMode((prev) => !prev)}
-              className={`rounded-md border px-4 py-2 font-semibold uppercase tracking-[0.08em] shadow-sm transition ${
-                blackoutMode
-                  ? "border-[#22311b] bg-[#2f3b21] text-[#f9f9ec] hover:bg-[#25301b]"
-                  : "border-[#d0c9a4] bg-white text-[#314123] hover:bg-[#f1edd8]"
-              }`}
-            >
-              {blackoutMode ? "Blackout mode: On" : "Blackout mode"}
-            </button>
-            <Link
-              href="/hub/admin"
-              className="rounded-md border border-[#d0c9a4] bg-[#f6f1dd] px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#4b5133] shadow-sm transition hover:bg-[#ede6c6]"
-            >
-              Back to admin
-            </Link>
-            <Link
-              href="/hub/admin/tasks"
-              className="rounded-md bg-[#6f8f3d] px-4 py-2 font-semibold uppercase tracking-[0.08em] text-white shadow-md transition hover:bg-[#5f7f35]"
-            >
-              Task editor
-            </Link>
-            <Link
-              href="/hub/admin/shifts"
-              className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#4b5133] shadow-sm transition hover:bg-[#f1edd8]"
-            >
-              Shift editor
-            </Link>
+          <div className="flex flex-col gap-3 text-xs text-[#6a6c4d]">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={refreshSchedule}
+                className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8]"
+              >
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={publishSchedule}
+                disabled={!selectedDate || scheduleMode !== "page"}
+                className="rounded-md bg-[#8fae4c] px-4 py-2 font-semibold uppercase tracking-[0.08em] text-[#f9f9ec] shadow-sm transition hover:bg-[#7e9c44] disabled:opacity-60"
+              >
+                Publish
+              </button>
+              <button
+                type="button"
+                onClick={autoGenerateSchedule}
+                disabled={autoGenerating || !scheduleData}
+                className="rounded-md border border-[#d0c9a4] bg-white px-4 py-2 font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8] disabled:opacity-60"
+              >
+                {autoGenerating ? "Auto-generating…" : "Auto-generate"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBlackoutMode((prev) => !prev)}
+                className={`rounded-md border px-4 py-2 font-semibold uppercase tracking-[0.08em] shadow-sm transition ${
+                  blackoutMode
+                    ? "border-[#22311b] bg-[#2f3b21] text-[#f9f9ec] hover:bg-[#25301b]"
+                    : "border-[#d0c9a4] bg-white text-[#314123] hover:bg-[#f1edd8]"
+                }`}
+              >
+                {blackoutMode ? "Blackout mode: On" : "Blackout mode"}
+              </button>
+              <Link
+                href="/hub/admin/tasks"
+                className="rounded-md bg-[#6f8f3d] px-4 py-2 font-semibold uppercase tracking-[0.08em] text-white shadow-md transition hover:bg-[#5f7f35]"
+              >
+                Task editor
+              </Link>
+              <Link
+                href="/hub/admin/shifts"
+                className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#4b5133] shadow-sm transition hover:bg-[#f1edd8]"
+              >
+                Shift editor
+              </Link>
+              <Link
+                href="/hub/admin"
+                className="rounded-md border border-[#d0c9a4] bg-[#f6f1dd] px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#4b5133] shadow-sm transition hover:bg-[#ede6c6]"
+              >
+                Back to admin
+              </Link>
+            </div>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-end gap-3 text-xs text-[#6a6c4d]">
@@ -1734,6 +1813,38 @@ export default function AdminScheduleEditorPage() {
               className="h-8 rounded-md bg-[#6f8f3d] px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-white shadow-sm disabled:opacity-60"
             >
               {copyingSchedule ? "Copying…" : "Copy schedule"}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-[#d0c9a4] bg-white/80 px-3 py-2">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.12em] text-[#7a7f54]">
+                Blackout from
+              </span>
+              <input
+                type="date"
+                value={blackoutRangeStart}
+                onChange={(e) => setBlackoutRangeStart(e.target.value)}
+                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-xs text-[#314123]"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.12em] text-[#7a7f54]">
+                Blackout to
+              </span>
+              <input
+                type="date"
+                value={blackoutRangeEnd}
+                onChange={(e) => setBlackoutRangeEnd(e.target.value)}
+                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-xs text-[#314123]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={applyBlackoutRange}
+              disabled={blackoutApplying}
+              className="h-8 rounded-md bg-[#2f3b21] px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-white shadow-sm disabled:opacity-60"
+            >
+              {blackoutApplying ? "Applying…" : "Apply blackout range"}
             </button>
           </div>
           <span className="rounded-full bg-[#f0f4de] px-3 py-2 text-[11px] font-semibold text-[#4b5133]">
