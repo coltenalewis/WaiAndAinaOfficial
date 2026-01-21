@@ -259,12 +259,13 @@ export default function AdminAnalyticsPage() {
       { tasks: string[]; outstanding: string[]; shifts: number }
     >();
     weekSchedules.forEach((entry) => {
-      if (!entry.schedule) return;
-      entry.schedule.people.forEach((person, rowIdx) => {
+      const schedule = entry.schedule;
+      if (!schedule) return;
+      schedule.people.forEach((person, rowIdx) => {
         if (!summary.has(person)) {
           summary.set(person, { tasks: [], outstanding: [], shifts: 0 });
         }
-        const row = entry.schedule.cells[rowIdx] || [];
+        const row = schedule.cells[rowIdx] || [];
         row.forEach((cell) => {
           const tasks = normalizeCellTasks(cell).map((task) => task);
           const hasTasks = tasks.length > 0;
