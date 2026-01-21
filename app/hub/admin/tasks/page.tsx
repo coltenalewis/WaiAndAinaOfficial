@@ -519,7 +519,7 @@ export default function TaskEditorPage() {
           }
         }
       }
-      await fetch("/api/tasks", {
+      const res = await fetch("/api/tasks", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -528,6 +528,10 @@ export default function TaskEditorPage() {
           occurrenceDate: deletePrompt.occurrenceDate,
         }),
       });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Unable to delete task.");
+      }
       setMessage("Task deleted.");
       setDeletePrompt({ task: null, mode: "single", occurrenceDate: null });
       await loadTasks();

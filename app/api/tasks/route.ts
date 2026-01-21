@@ -435,7 +435,11 @@ export async function DELETE(req: Request) {
     );
   }
   const body = await req.json().catch(() => null);
-  const { id, applyTo = "single", occurrenceDate } = body || {};
+  const url = new URL(req.url);
+  const id = body?.id || url.searchParams.get("id");
+  const applyTo = body?.applyTo || url.searchParams.get("applyTo") || "single";
+  const occurrenceDate =
+    body?.occurrenceDate || url.searchParams.get("occurrenceDate");
 
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -451,7 +455,11 @@ export async function DELETE(req: Request) {
     }
 
     const seriesData = await supabaseRequest<any[]>("tasks", {
-      query: { select: "id,parent_task_id,occurrence_date", id: `eq.${id}`, limit: 1 },
+      query: {
+        select: "id,parent_task_id,occurrence_date,origin_date",
+        id: `eq.${id}`,
+        limit: 1,
+      },
     });
     const target = seriesData?.[0];
     if (!target) {
@@ -459,22 +467,40 @@ export async function DELETE(req: Request) {
     }
 
     const seriesRoot = target.parent_task_id || target.id;
-    const compareDate = occurrenceDate || target.occurrence_date;
+    const compareDate =
+      occurrenceDate || target.occurrence_date || target.origin_date;
 
-    const filters: Record<string, string> = {};
-    if (applyTo === "all") {
-      filters.or = `id.eq.${seriesRoot},parent_task_id.eq.${seriesRoot}`;
-    } else {
-      filters.parent_task_id = `eq.${seriesRoot}`;
-      if (compareDate) {
-        filters.occurrence_date = `gte.${compareDate}`;
-      }
+    if (applyTo === "future" && !compareDate) {
+      return NextResponse.json(
+        { error: "Missing occurrence date for future deletes." },
+        { status: 400 }
+      );
+    }
+
+    const occurrenceFilters: Record<string, string> = {
+      parent_task_id: `eq.${seriesRoot}`,
+    };
+    if (applyTo === "future" && compareDate) {
+      occurrenceFilters.occurrence_date = `gte.${compareDate}`;
     }
 
     await supabaseRequest("tasks", {
       method: "DELETE",
-      query: filters,
+      query: occurrenceFilters,
     });
+
+    if (
+      applyTo === "all" ||
+      (applyTo === "future" &&
+        compareDate &&
+        target.occurrence_date &&
+        compareDate <= target.occurrence_date)
+    ) {
+      await supabaseRequest("tasks", {
+        method: "DELETE",
+        query: { id: `eq.${seriesRoot}` },
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
