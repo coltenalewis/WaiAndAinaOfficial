@@ -8,6 +8,28 @@ type ScheduleResponse = {
   scheduleDate?: string;
   message?: string;
 };
+type CustomTable = {
+  id: string;
+  title: string;
+  scheduleDate: string;
+  rowHeaders: string[];
+  columnHeaders: string[];
+  cells: string[][];
+  rowHeaderType: string;
+  columnHeaderType: string;
+  cellType: string;
+};
+
+type TaskDetail = {
+  id: string;
+  name: string;
+  description?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  estimatedTime?: number | null;
+  personCount?: number | null;
+  timeSlots?: string[] | null;
+};
 
 function toIsoDate(label?: string | null) {
   if (!label) return null;
@@ -96,6 +118,44 @@ export async function POST(req: Request) {
       };
     });
 
+    const scheduleDateLabel = schedule.scheduleDate || label;
+    let customTables: CustomTable[] = [];
+    try {
+      const customRes = await fetch(
+        `${origin}/api/schedule/custom-tables?date=${encodeURIComponent(label)}`,
+        { cache: "no-store" }
+      );
+      if (customRes.ok) {
+        const customJson = await customRes.json();
+        customTables = customJson.tables || [];
+      }
+    } catch (err) {
+      console.warn("Failed to load custom tables for report:", err);
+    }
+
+    let taskDetails: TaskDetail[] = [];
+    try {
+      const tasksRes = await fetch(
+        `${origin}/api/tasks?includeOccurrences=true&start=${reportDate}&end=${reportDate}`,
+        { cache: "no-store" }
+      );
+      if (tasksRes.ok) {
+        const tasksJson = await tasksRes.json();
+        taskDetails = (tasksJson.tasks || []).map((task: any) => ({
+          id: String(task.id || ""),
+          name: String(task.name || ""),
+          description: task.description || null,
+          status: task.status || null,
+          priority: task.priority || null,
+          estimatedTime: task.estimated_time ?? null,
+          personCount: task.person_count ?? null,
+          timeSlots: Array.isArray(task.time_slots) ? task.time_slots : null,
+        }));
+      }
+    } catch (err) {
+      console.warn("Failed to load task details for report:", err);
+    }
+
     const payload = {
       scheduleDate: schedule.scheduleDate || label,
       people: schedule.people,
@@ -106,17 +166,21 @@ export async function POST(req: Request) {
       notes: schedule.cells.flatMap((row: any) =>
         row.map((cell: any) => normalizeCellNote(cell)).filter(Boolean)
       ),
+      customTables,
+      taskDetails,
     };
     const totalTasks = shiftSummary.reduce((sum, entry) => sum + entry.taskCount, 0);
     const totalNotes = payload.notes.length;
     const reportTitle = "Daily Operations Report";
     const summary = {
       reportTitle,
-      scheduleDate: schedule.scheduleDate || label,
+      scheduleDate: scheduleDateLabel,
       peopleCount: schedule.people.length,
       shiftsCount: schedule.slots.length,
       totalTasks,
       totalNotes,
+      customTableCount: customTables.length,
+      totalDetailedTasks: taskDetails.length,
     };
 
     const [report] = await supabaseRequest<any[]>("schedule_reports", {

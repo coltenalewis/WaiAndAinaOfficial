@@ -5,6 +5,29 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { loadSession } from "@/lib/session";
 
+function normalizeCellTasks(cell: any): string[] {
+  if (!cell) return [];
+  if (typeof cell === "string") {
+    const [firstLine] = cell.split("\n");
+    return firstLine
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return (cell.tasks || []).map((task: any) => task?.name).filter(Boolean);
+}
+
+function normalizeCellNote(cell: any): string | null {
+  if (!cell) return null;
+  if (typeof cell === "string") {
+    const [, ...rest] = cell.split("\n");
+    const note = rest.join("\n").trim();
+    return note ? note : null;
+  }
+  const note = cell.note?.trim();
+  return note || null;
+}
+
 type ReportPayload = {
   id: string;
   report_date: string;
@@ -17,6 +40,8 @@ type ReportPayload = {
     shiftsCount?: number;
     totalTasks?: number;
     totalNotes?: number;
+    customTableCount?: number;
+    totalDetailedTasks?: number;
   } | null;
   data: {
     scheduleDate: string;
@@ -36,6 +61,27 @@ type ReportPayload = {
       tasks: { id?: string; name: string }[];
     }[];
     notes?: string[];
+    customTables?: {
+      id: string;
+      title: string;
+      scheduleDate: string;
+      rowHeaders: string[];
+      columnHeaders: string[];
+      cells: string[][];
+      rowHeaderType: string;
+      columnHeaderType: string;
+      cellType: string;
+    }[];
+    taskDetails?: {
+      id: string;
+      name: string;
+      description?: string | null;
+      status?: string | null;
+      priority?: string | null;
+      estimatedTime?: number | null;
+      personCount?: number | null;
+      timeSlots?: string[] | null;
+    }[];
   };
   created_at: string;
   created_by?: string | null;
@@ -114,6 +160,10 @@ export default function AnalyticsReportPage() {
   const totalNotes = report.summary?.totalNotes ?? (report.data.notes || []).length;
   const peopleCount = report.summary?.peopleCount ?? report.data.people.length;
   const shiftsCount = report.summary?.shiftsCount ?? report.data.slots.length;
+  const customTableCount =
+    report.summary?.customTableCount ?? (report.data.customTables || []).length;
+  const totalDetailedTasks =
+    report.summary?.totalDetailedTasks ?? (report.data.taskDetails || []).length;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
@@ -151,15 +201,24 @@ export default function AnalyticsReportPage() {
 
       <div className="print-page rounded-[32px] border border-[#e1d8b6] bg-white p-8 shadow-[0_20px_60px_rgba(49,65,35,0.12)]">
         <div className="flex flex-col gap-6 border-b border-[#ece3c4] pb-6">
-          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.26em] text-[#7a7f54]">
-                Wai & Aina · Admin Report
-              </p>
-              <h2 className="text-3xl font-semibold text-[#314123]">{reportTitle}</h2>
-              <p className="text-sm text-[#5f5a3b]">
-                Report date: {report.date_label}
-              </p>
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logo.png"
+                  alt="Wai & Aina"
+                  className="h-12 w-12 rounded-xl border border-[#e2d7b5] object-cover"
+                />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.26em] text-[#7a7f54]">
+                    Wai & Aina · Admin Report
+                  </p>
+                  <h2 className="text-3xl font-semibold text-[#314123]">{reportTitle}</h2>
+                  <p className="text-sm text-[#5f5a3b]">
+                    Report date: {report.date_label}
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="rounded-2xl border border-[#e2d7b5] bg-[#f9f6e7] px-4 py-3 text-xs text-[#4b5133]">
               <div className="font-semibold uppercase tracking-[0.12em] text-[#7a7f54]">
@@ -167,14 +226,20 @@ export default function AnalyticsReportPage() {
               </div>
               <div>{new Date(report.created_at).toLocaleDateString()}</div>
               {report.created_by && <div>by {report.created_by}</div>}
+              <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-[#7a7f54]">
+                Generated
+              </div>
+              <div>{new Date(report.created_at).toLocaleTimeString()}</div>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             {[
               { label: "People", value: peopleCount },
               { label: "Shifts", value: shiftsCount },
               { label: "Tasks", value: totalTasks },
               { label: "Notes", value: totalNotes },
+              { label: "Custom Tables", value: customTableCount },
+              { label: "Detailed Tasks", value: totalDetailedTasks },
             ].map((metric) => (
               <div
                 key={metric.label}
@@ -210,6 +275,12 @@ export default function AnalyticsReportPage() {
                 </span>
                 <span className="font-semibold">{totalTasks}</span>
               </div>
+              <div className="flex items-center justify-between border-b border-[#e2d7b5] pb-2">
+                <span className="uppercase tracking-[0.12em] text-[#7a7f54]">
+                  Custom Tables
+                </span>
+                <span className="font-semibold">{customTableCount}</span>
+              </div>
               <div className="flex items-center justify-between">
                 <span className="uppercase tracking-[0.12em] text-[#7a7f54]">
                   Notes Captured
@@ -231,6 +302,67 @@ export default function AnalyticsReportPage() {
                 Snapshot stored for historical reference and sharing.
               </li>
             </ul>
+          </div>
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-[#e2d7b5] bg-white p-5">
+          <h3 className="text-lg font-semibold text-[#314123]">Schedule snapshot</h3>
+          <p className="mt-1 text-sm text-[#5f5a3b]">
+            Task assignments by person and shift for {report.data.scheduleDate}.
+          </p>
+          <div className="mt-4 overflow-auto">
+            <table className="min-w-full border-collapse text-xs">
+              <thead className="bg-[#f5f1df] text-[11px] uppercase tracking-[0.12em] text-[#6b7247]">
+                <tr>
+                  <th className="border border-[#e0d6b8] px-3 py-2 text-left">Person</th>
+                  {report.data.slots.map((slot) => (
+                    <th key={slot.id} className="border border-[#e0d6b8] px-3 py-2 text-left">
+                      <div className="font-semibold text-[#314123]">{slot.label}</div>
+                      {slot.timeRange && (
+                        <div className="text-[10px] font-normal text-[#7a7f54]">
+                          {slot.timeRange}
+                        </div>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {report.data.people.map((person, rowIdx) => (
+                  <tr key={person} className="align-top">
+                    <td className="border border-[#e0d6b8] px-3 py-2 font-semibold text-[#314123]">
+                      {person}
+                    </td>
+                    {report.data.slots.map((slot, colIdx) => {
+                      const cell = report.data.cells[rowIdx]?.[colIdx];
+                      const tasks = normalizeCellTasks(cell);
+                      const note = normalizeCellNote(cell);
+                      return (
+                        <td
+                          key={`${person}-${slot.id}`}
+                          className="border border-[#e0d6b8] px-3 py-2 text-[#4b5133]"
+                        >
+                          {tasks.length > 0 ? (
+                            <ul className="list-disc space-y-1 pl-4">
+                              {tasks.map((task) => (
+                                <li key={`${person}-${slot.id}-${task}`}>{task}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span className="text-[11px] text-[#9aa07b]">No tasks</span>
+                          )}
+                          {note && (
+                            <p className="mt-2 text-[11px] italic text-[#6a6c4d]">
+                              Note: {note}
+                            </p>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -289,6 +421,114 @@ export default function AnalyticsReportPage() {
             ))}
           </div>
         </div>
+
+        {(report.data.customTables || []).length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-lg font-semibold text-[#314123]">Custom tables</h3>
+            <div className="mt-4 space-y-6">
+              {(report.data.customTables || []).map((table) => (
+                <div
+                  key={table.id}
+                  className="rounded-2xl border border-[#e2d7b5] bg-white p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-base font-semibold text-[#314123]">{table.title}</h4>
+                    <span className="text-[11px] uppercase tracking-[0.12em] text-[#7a7f54]">
+                      {table.scheduleDate}
+                    </span>
+                  </div>
+                  <div className="mt-3 overflow-auto">
+                    <table className="min-w-full border-collapse text-xs">
+                      <thead className="bg-[#f5f1df] text-[11px] uppercase tracking-[0.12em] text-[#6b7247]">
+                        <tr>
+                          <th className="border border-[#e0d6b8] px-3 py-2 text-left">
+                            {table.rowHeaderType === "text" ? "Row" : "Rows"}
+                          </th>
+                          {table.columnHeaders.map((header, idx) => (
+                            <th
+                              key={`${table.id}-col-${idx}`}
+                              className="border border-[#e0d6b8] px-3 py-2 text-left"
+                            >
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {table.rowHeaders.map((rowHeader, rowIdx) => (
+                          <tr key={`${table.id}-row-${rowIdx}`}>
+                            <td className="border border-[#e0d6b8] px-3 py-2 font-semibold text-[#314123]">
+                              {rowHeader}
+                            </td>
+                            {table.columnHeaders.map((_, colIdx) => (
+                              <td
+                                key={`${table.id}-cell-${rowIdx}-${colIdx}`}
+                                className="border border-[#e0d6b8] px-3 py-2 text-[#4b5133]"
+                              >
+                                {table.cells[rowIdx]?.[colIdx] || "—"}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(report.data.taskDetails || []).length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-lg font-semibold text-[#314123]">Tasks & descriptions</h3>
+            <p className="mt-1 text-sm text-[#5f5a3b]">
+              Detailed task list captured for record keeping.
+            </p>
+            <div className="mt-4 space-y-3">
+              {[...(report.data.taskDetails || [])]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((task) => (
+                  <div
+                    key={task.id}
+                    className="rounded-xl border border-[#e2d7b5] bg-white px-4 py-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold text-[#314123]">{task.name}</span>
+                      <span className="text-[11px] uppercase tracking-[0.12em] text-[#7a7f54]">
+                        {task.status || "status n/a"}
+                      </span>
+                    </div>
+                    {task.description && (
+                      <p className="mt-2 text-sm text-[#4b5133]">{task.description}</p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#6a6c4d]">
+                      {task.priority && (
+                        <span className="rounded-full bg-[#f1edd8] px-2 py-1">
+                          Priority: {task.priority}
+                        </span>
+                      )}
+                      {task.estimatedTime !== null && task.estimatedTime !== undefined && (
+                        <span className="rounded-full bg-[#f1edd8] px-2 py-1">
+                          Est. time: {task.estimatedTime} hrs
+                        </span>
+                      )}
+                      {task.personCount !== null && task.personCount !== undefined && (
+                        <span className="rounded-full bg-[#f1edd8] px-2 py-1">
+                          People: {task.personCount}
+                        </span>
+                      )}
+                      {task.timeSlots && task.timeSlots.length > 0 && (
+                        <span className="rounded-full bg-[#f1edd8] px-2 py-1">
+                          Slots: {task.timeSlots.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {report.data.notes && report.data.notes.length > 0 && (
           <div className="mt-8 rounded-2xl border border-[#e2d7b5] bg-[#fdfcf8] p-5">
