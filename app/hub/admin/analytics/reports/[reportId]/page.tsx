@@ -167,7 +167,7 @@ export default function AnalyticsReportPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
-      <div className="rounded-3xl border border-[#d0c9a4] bg-white/80 p-6 shadow-sm">
+      <div className="rounded-2xl border border-[#d6cfb3] bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Report</p>
@@ -192,14 +192,11 @@ export default function AnalyticsReportPage() {
             >
               Back to analytics
             </Link>
-            <span className="text-[11px] uppercase tracking-[0.12em] text-[#7a7f54]">
-              Save as PDF in the print dialog
-            </span>
           </div>
         </div>
       </div>
 
-      <div className="print-page rounded-[32px] border border-[#e1d8b6] bg-white p-8 shadow-[0_20px_60px_rgba(49,65,35,0.12)]">
+      <div className="print-page rounded-2xl border border-[#d6cfb3] bg-white p-8 shadow-[0_16px_40px_rgba(49,65,35,0.08)]">
         <div className="flex flex-col gap-6 border-b border-[#ece3c4] pb-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
@@ -207,20 +204,20 @@ export default function AnalyticsReportPage() {
                 <img
                   src="/logo.png"
                   alt="Wai & Aina"
-                  className="h-12 w-12 rounded-xl border border-[#e2d7b5] object-cover"
+                  className="h-12 w-12 rounded-lg border border-[#e2d7b5] object-cover"
                 />
                 <div>
-                  <p className="text-xs uppercase tracking-[0.26em] text-[#7a7f54]">
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-[#6b6f52]">
                     Wai & Aina · Admin Report
                   </p>
-                  <h2 className="text-3xl font-semibold text-[#314123]">{reportTitle}</h2>
-                  <p className="text-sm text-[#5f5a3b]">
+                  <h2 className="text-3xl font-semibold text-[#28321d]">{reportTitle}</h2>
+                  <p className="text-sm text-[#58533a]">
                     Report date: {report.date_label}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-[#e2d7b5] bg-[#f9f6e7] px-4 py-3 text-xs text-[#4b5133]">
+            <div className="rounded-xl border border-[#e0d6b8] bg-[#fbf9f0] px-4 py-3 text-xs text-[#4b5133]">
               <div className="font-semibold uppercase tracking-[0.12em] text-[#7a7f54]">
                 Prepared
               </div>
@@ -232,7 +229,7 @@ export default function AnalyticsReportPage() {
               <div>{new Date(report.created_at).toLocaleTimeString()}</div>
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             {[
               { label: "People", value: peopleCount },
               { label: "Shifts", value: shiftsCount },
@@ -243,19 +240,19 @@ export default function AnalyticsReportPage() {
             ].map((metric) => (
               <div
                 key={metric.label}
-                className="rounded-2xl border border-[#e2d7b5] bg-white px-4 py-3"
+                className="rounded-xl border border-[#e0d6b8] bg-white px-3 py-2"
               >
-                <div className="text-[11px] uppercase tracking-[0.18em] text-[#7a7f54]">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-[#7a7f54]">
                   {metric.label}
                 </div>
-                <div className="text-2xl font-semibold text-[#314123]">{metric.value}</div>
+                <div className="text-xl font-semibold text-[#28321d]">{metric.value}</div>
               </div>
             ))}
           </div>
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <div className="rounded-2xl border border-[#e2d7b5] bg-[#faf8ee] p-5">
+          <div className="rounded-2xl border border-[#e0d6b8] bg-[#fbf9f0] p-5">
             <h3 className="text-lg font-semibold text-[#314123]">Executive summary</h3>
             <p className="mt-2 text-sm text-[#4b5133]">
               This report captures the staging schedule for {report.date_label},
@@ -289,30 +286,30 @@ export default function AnalyticsReportPage() {
               </div>
             </div>
           </div>
-          <div className="rounded-2xl border border-[#e2d7b5] bg-white p-5">
+          <div className="rounded-2xl border border-[#e0d6b8] bg-white p-5">
             <h3 className="text-lg font-semibold text-[#314123]">Highlights</h3>
             <ul className="mt-3 space-y-3 text-sm text-[#4b5133]">
-              <li className="rounded-lg border border-[#e2d7b5] bg-[#fdfcf8] px-3 py-2">
+              <li className="rounded-md border border-[#e0d6b8] bg-[#fdfcf8] px-3 py-2">
                 Staffing coverage across {shiftsCount} shifts for {peopleCount} people.
               </li>
-              <li className="rounded-lg border border-[#e2d7b5] bg-[#fdfcf8] px-3 py-2">
+              <li className="rounded-md border border-[#e0d6b8] bg-[#fdfcf8] px-3 py-2">
                 {totalTasks} tasks assigned with {totalNotes} operational notes recorded.
               </li>
-              <li className="rounded-lg border border-[#e2d7b5] bg-[#fdfcf8] px-3 py-2">
+              <li className="rounded-md border border-[#e0d6b8] bg-[#fdfcf8] px-3 py-2">
                 Snapshot stored for historical reference and sharing.
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="mt-8 rounded-2xl border border-[#e2d7b5] bg-white p-5">
+        <div className="mt-8 rounded-2xl border border-[#e0d6b8] bg-white p-5">
           <h3 className="text-lg font-semibold text-[#314123]">Schedule snapshot</h3>
           <p className="mt-1 text-sm text-[#5f5a3b]">
             Task assignments by person and shift for {report.data.scheduleDate}.
           </p>
           <div className="mt-4 overflow-auto">
-            <table className="min-w-full border-collapse text-xs">
-              <thead className="bg-[#f5f1df] text-[11px] uppercase tracking-[0.12em] text-[#6b7247]">
+            <table className="min-w-full border-collapse text-[11px]">
+              <thead className="bg-[#f5f1df] text-[10px] uppercase tracking-[0.14em] text-[#6b7247]">
                 <tr>
                   <th className="border border-[#e0d6b8] px-3 py-2 text-left">Person</th>
                   {report.data.slots.map((slot) => (
@@ -330,7 +327,7 @@ export default function AnalyticsReportPage() {
               <tbody>
                 {report.data.people.map((person, rowIdx) => (
                   <tr key={person} className="align-top">
-                    <td className="border border-[#e0d6b8] px-3 py-2 font-semibold text-[#314123]">
+                    <td className="border border-[#e0d6b8] px-3 py-2 font-semibold text-[#28321d]">
                       {person}
                     </td>
                     {report.data.slots.map((slot, colIdx) => {
@@ -340,19 +337,21 @@ export default function AnalyticsReportPage() {
                       return (
                         <td
                           key={`${person}-${slot.id}`}
-                          className="border border-[#e0d6b8] px-3 py-2 text-[#4b5133]"
+                          className="border border-[#e0d6b8] px-2 py-2 text-[#4b5133]"
                         >
                           {tasks.length > 0 ? (
-                            <ul className="list-disc space-y-1 pl-4">
+                            <ul className="space-y-1">
                               {tasks.map((task) => (
-                                <li key={`${person}-${slot.id}-${task}`}>{task}</li>
+                                <li key={`${person}-${slot.id}-${task}`} className="leading-snug">
+                                  • {task}
+                                </li>
                               ))}
                             </ul>
                           ) : (
                             <span className="text-[11px] text-[#9aa07b]">No tasks</span>
                           )}
                           {note && (
-                            <p className="mt-2 text-[11px] italic text-[#6a6c4d]">
+                            <p className="mt-2 text-[10px] italic text-[#6a6c4d]">
                               Note: {note}
                             </p>
                           )}
@@ -372,16 +371,16 @@ export default function AnalyticsReportPage() {
             {(report.data.peopleSummary || []).map((person) => (
               <div
                 key={person.person}
-                className="rounded-xl border border-[#e2d7b5] bg-white/80 px-4 py-3"
+                className="rounded-xl border border-[#e0d6b8] bg-white px-4 py-3"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[#314123]">{person.person}</span>
+                  <span className="font-semibold text-[#28321d]">{person.person}</span>
                   <span className="text-xs text-[#6a6c4d]">
                     {person.taskCount} tasks
                   </span>
                 </div>
                 {person.tasks.length > 0 && (
-                  <p className="mt-2 text-xs text-[#4b5133]">
+                  <p className="mt-2 text-xs text-[#4b5133] leading-relaxed">
                     {person.tasks.map((task) => task.name).join(", ")}
                   </p>
                 )}
@@ -403,17 +402,17 @@ export default function AnalyticsReportPage() {
             {(report.data.shiftSummary || []).map((shift) => (
               <div
                 key={shift.slot}
-                className="rounded-xl border border-[#e2d7b5] bg-white/80 px-4 py-3"
+                className="rounded-xl border border-[#e0d6b8] bg-white px-4 py-3"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[#314123]">{shift.slot}</span>
+                  <span className="font-semibold text-[#28321d]">{shift.slot}</span>
                   <span className="text-xs text-[#6a6c4d]">{shift.taskCount} tasks</span>
                 </div>
                 {shift.timeRange && (
                   <p className="mt-1 text-xs text-[#6a6c4d]">{shift.timeRange}</p>
                 )}
                 {shift.tasks.length > 0 && (
-                  <p className="mt-2 text-xs text-[#4b5133]">
+                  <p className="mt-2 text-xs text-[#4b5133] leading-relaxed">
                     {shift.tasks.map((task) => task.name).join(", ")}
                   </p>
                 )}
@@ -429,7 +428,7 @@ export default function AnalyticsReportPage() {
               {(report.data.customTables || []).map((table) => (
                 <div
                   key={table.id}
-                  className="rounded-2xl border border-[#e2d7b5] bg-white p-4"
+                  className="rounded-2xl border border-[#e0d6b8] bg-white p-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-base font-semibold text-[#314123]">{table.title}</h4>
@@ -438,8 +437,8 @@ export default function AnalyticsReportPage() {
                     </span>
                   </div>
                   <div className="mt-3 overflow-auto">
-                    <table className="min-w-full border-collapse text-xs">
-                      <thead className="bg-[#f5f1df] text-[11px] uppercase tracking-[0.12em] text-[#6b7247]">
+                    <table className="min-w-full border-collapse text-[11px]">
+                      <thead className="bg-[#f5f1df] text-[10px] uppercase tracking-[0.14em] text-[#6b7247]">
                         <tr>
                           <th className="border border-[#e0d6b8] px-3 py-2 text-left">
                             {table.rowHeaderType === "text" ? "Row" : "Rows"}
@@ -491,10 +490,10 @@ export default function AnalyticsReportPage() {
                 .map((task) => (
                   <div
                     key={task.id}
-                    className="rounded-xl border border-[#e2d7b5] bg-white px-4 py-3"
+                    className="rounded-xl border border-[#e0d6b8] bg-white px-4 py-3"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold text-[#314123]">{task.name}</span>
+                      <span className="font-semibold text-[#28321d]">{task.name}</span>
                       <span className="text-[11px] uppercase tracking-[0.12em] text-[#7a7f54]">
                         {task.status || "status n/a"}
                       </span>
@@ -504,22 +503,22 @@ export default function AnalyticsReportPage() {
                     )}
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#6a6c4d]">
                       {task.priority && (
-                        <span className="rounded-full bg-[#f1edd8] px-2 py-1">
+                        <span className="rounded-full bg-[#f3f0e1] px-2 py-1">
                           Priority: {task.priority}
                         </span>
                       )}
                       {task.estimatedTime !== null && task.estimatedTime !== undefined && (
-                        <span className="rounded-full bg-[#f1edd8] px-2 py-1">
+                        <span className="rounded-full bg-[#f3f0e1] px-2 py-1">
                           Est. time: {task.estimatedTime} hrs
                         </span>
                       )}
                       {task.personCount !== null && task.personCount !== undefined && (
-                        <span className="rounded-full bg-[#f1edd8] px-2 py-1">
+                        <span className="rounded-full bg-[#f3f0e1] px-2 py-1">
                           People: {task.personCount}
                         </span>
                       )}
                       {task.timeSlots && task.timeSlots.length > 0 && (
-                        <span className="rounded-full bg-[#f1edd8] px-2 py-1">
+                        <span className="rounded-full bg-[#f3f0e1] px-2 py-1">
                           Slots: {task.timeSlots.join(", ")}
                         </span>
                       )}
@@ -531,7 +530,7 @@ export default function AnalyticsReportPage() {
         )}
 
         {report.data.notes && report.data.notes.length > 0 && (
-          <div className="mt-8 rounded-2xl border border-[#e2d7b5] bg-[#fdfcf8] p-5">
+          <div className="mt-8 rounded-2xl border border-[#e0d6b8] bg-[#fdfcf8] p-5">
             <h3 className="text-lg font-semibold text-[#314123]">Notes log</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-[#4b5133]">
               {report.data.notes.map((note, idx) => (
