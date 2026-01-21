@@ -181,6 +181,7 @@ create table if not exists schedule_cells (
   shift_id uuid references shifts(id) on delete cascade,
   tasks text[] not null default '{}',
   note text,
+  blocked boolean not null default false,
   created_at timestamptz not null default now(),
   unique (schedule_id, person_id, shift_id)
 );

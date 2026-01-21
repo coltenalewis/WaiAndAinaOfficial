@@ -52,7 +52,7 @@ type DragPayload = {
   fromSlotId?: string;
   fromIndex?: number;
 };
-type CellContent = { tasks: ScheduledTask[]; note: string };
+type CellContent = { tasks: ScheduledTask[]; note: string; blocked?: boolean };
 type AutoSlotChoice = { row: number; col: number; score: number };
 
 const DRAG_DATA_TYPE = "application/json/task";
@@ -156,6 +156,9 @@ export default function AdminScheduleEditorPage() {
   const [taskSearch, setTaskSearch] = useState("");
   const [taskTypeFilter, setTaskTypeFilter] = useState("");
   const [taskStatusFilter, setTaskStatusFilter] = useState("");
+  const [showAllRecurring, setShowAllRecurring] = useState(false);
+  const [hideCompletedRecurring, setHideCompletedRecurring] = useState(false);
+  const [hideFullyScheduledRecurring, setHideFullyScheduledRecurring] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{
     person: string;
     slotId: string;
@@ -197,6 +200,7 @@ export default function AdminScheduleEditorPage() {
   const [mobileDockTab, setMobileDockTab] = useState<"recurring" | "oneOff">("recurring");
   const [desktopDockOpen, setDesktopDockOpen] = useState(true);
   const [canvasExpanded, setCanvasExpanded] = useState(false);
+  const [blackoutMode, setBlackoutMode] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoMessage, setPhotoMessage] = useState<string | null>(null);
   const [saveLog, setSaveLog] = useState<{
@@ -516,8 +520,19 @@ export default function AdminScheduleEditorPage() {
         const matchesStatus = taskStatusFilter
           ? (task.status || "").toLowerCase() === taskStatusFilter.toLowerCase()
           : true;
-        const matchesDate = dateParam ? task.occurrenceDate === dateParam : true;
-        return matchesSearch && matchesType && matchesStatus && matchesDate;
+        const matchesDate = showAllRecurring ? true : dateParam ? task.occurrenceDate === dateParam : true;
+        const isCompleted = (task.status || "").toLowerCase() === "completed";
+        const hasEnoughPeople = isTaskHandled(task).hasEnoughPeople;
+        const passesCompleted = hideCompletedRecurring ? !isCompleted : true;
+        const passesScheduled = hideFullyScheduledRecurring ? !hasEnoughPeople : true;
+        return (
+          matchesSearch &&
+          matchesType &&
+          matchesStatus &&
+          matchesDate &&
+          passesCompleted &&
+          passesScheduled
+        );
       })
       .sort(sortTasks);
   }, [
@@ -526,6 +541,10 @@ export default function AdminScheduleEditorPage() {
     taskSearch,
     taskStatusFilter,
     taskTypeFilter,
+    showAllRecurring,
+    hideCompletedRecurring,
+    hideFullyScheduledRecurring,
+    isTaskHandled,
     sortTasks,
   ]);
 
@@ -640,6 +659,7 @@ export default function AdminScheduleEditorPage() {
             slotId,
             tasks: content.tasks.map((task) => task.id),
             note: content.note,
+            blocked: Boolean(content.blocked),
             dateLabel: scheduleMode === "page" ? activeDate : undefined,
             staging: scheduleMode === "page",
           }),
@@ -1062,6 +1082,19 @@ export default function AdminScheduleEditorPage() {
         });
         return;
       }
+      const coord = findCoord(person, slot.id, scheduleData);
+      if (coord) {
+        const targetCell = scheduleData.cells?.[coord.row]?.[coord.col];
+        if (targetCell?.blocked) {
+          setSaveLog({
+            status: "error",
+            message: "This cell is blocked for scheduling.",
+            lastAttempt: new Date().toLocaleTimeString(),
+            payload: { person, slotId: slot.id },
+          });
+          return;
+        }
+      }
       e.dataTransfer.dropEffect = "move";
       const jsonPayload = e.dataTransfer.getData(DRAG_DATA_TYPE);
       const textPayload = e.dataTransfer.getData("text/task-name");
@@ -1115,7 +1148,62 @@ export default function AdminScheduleEditorPage() {
     return { content };
   };
 
+  const toggleBlackoutCell = useCallback(
+    async (person: string, slot: Slot, nextBlocked: boolean) => {
+      const activeDate = selectedDate || scheduleData?.scheduleDate || "";
+      if (!activeDate) return;
+      setPendingCells((prev) => new Set(prev).add(`${person}-${slot.id}`));
+      try {
+        await fetch("/api/schedule/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            person,
+            slotId: slot.id,
+            dateLabel: activeDate,
+            tasks: [],
+            note: "",
+            blocked: nextBlocked,
+          }),
+        });
+        setScheduleData((prev) => {
+          if (!prev) return prev;
+          const coord = findCoord(person, slot.id, prev);
+          if (!coord) return prev;
+          const nextCells = prev.cells.map((row, rowIdx) =>
+            row.map((cell, colIdx) => {
+              if (rowIdx !== coord.row || colIdx !== coord.col) return cell;
+              return { ...cell, tasks: [], note: "", blocked: nextBlocked };
+            })
+          );
+          return { ...prev, cells: nextCells };
+        });
+      } catch (err) {
+        console.error("Failed to update blackout cell", err);
+        setMessage("Unable to update blackout cell.");
+      } finally {
+        setPendingCells((prev) => {
+          const next = new Set(prev);
+          next.delete(`${person}-${slot.id}`);
+          return next;
+        });
+      }
+    },
+    [findCoord, scheduleData?.scheduleDate, selectedDate]
+  );
+
   const selectCell = (person: string, slot: Slot) => {
+    const coord = findCoord(person, slot.id, scheduleData);
+    const current = coord ? scheduleData?.cells?.[coord.row]?.[coord.col] : null;
+    if (blackoutMode) {
+      const nextBlocked = !current?.blocked;
+      toggleBlackoutCell(person, slot, nextBlocked);
+      return;
+    }
+    if (current?.blocked) {
+      setMessage("This cell is blocked. Toggle blackout mode to edit it.");
+      return;
+    }
     if (selectedCell?.person !== person || selectedCell?.slotId !== slot.id) {
       setCustomTask("");
     }
@@ -1348,7 +1436,7 @@ export default function AdminScheduleEditorPage() {
         sourceData.slots.forEach((slot, colIdx) => {
           const cell = sourceData.cells?.[rowIdx]?.[colIdx];
           if (!cell) return;
-          if (!cell.tasks.length && !cell.note) return;
+          if (!cell.tasks.length && !cell.note && !cell.blocked) return;
           updates.push(
             fetch("/api/schedule/update", {
               method: "POST",
@@ -1358,6 +1446,7 @@ export default function AdminScheduleEditorPage() {
                 slotId: slot.id,
                 tasks: cell.tasks.map((task) => task.id),
                 note: cell.note,
+                blocked: cell.blocked,
                 dateLabel: copyTargetDate,
                 staging: true,
               }),
@@ -1411,13 +1500,13 @@ export default function AdminScheduleEditorPage() {
         });
 
       const nextCells = scheduleData.cells.map((row) =>
-        row.map((cell) => ({ tasks: [...cell.tasks], note: cell.note }))
+        row.map((cell) => ({ tasks: [...cell.tasks], note: cell.note, blocked: cell.blocked }))
       );
       const changedCells = new Set<string>();
 
       const addTaskToCell = (rowIdx: number, colIdx: number, task: ScheduledTask) => {
         const cell = nextCells[rowIdx]?.[colIdx];
-        if (!cell) return;
+        if (!cell || cell.blocked) return;
         cell.tasks.push(task);
         changedCells.add(`${rowIdx}-${colIdx}`);
       };
@@ -1548,6 +1637,17 @@ export default function AdminScheduleEditorPage() {
             >
               {autoGenerating ? "Auto-generating…" : "Auto-generate"}
             </button>
+            <button
+              type="button"
+              onClick={() => setBlackoutMode((prev) => !prev)}
+              className={`rounded-md border px-4 py-2 font-semibold uppercase tracking-[0.08em] shadow-sm transition ${
+                blackoutMode
+                  ? "border-[#22311b] bg-[#2f3b21] text-[#f9f9ec] hover:bg-[#25301b]"
+                  : "border-[#d0c9a4] bg-white text-[#314123] hover:bg-[#f1edd8]"
+              }`}
+            >
+              {blackoutMode ? "Blackout mode: On" : "Blackout mode"}
+            </button>
             <Link
               href="/hub/admin"
               className="rounded-md border border-[#d0c9a4] bg-[#f6f1dd] px-3 py-2 font-semibold uppercase tracking-[0.08em] text-[#4b5133] shadow-sm transition hover:bg-[#ede6c6]"
@@ -1639,6 +1739,11 @@ export default function AdminScheduleEditorPage() {
           <span className="rounded-full bg-[#f0f4de] px-3 py-2 text-[11px] font-semibold text-[#4b5133]">
             Volunteers auto-sync from the Users database
           </span>
+          {blackoutMode && (
+            <span className="rounded-full bg-[#2f3b21] px-3 py-2 text-[11px] font-semibold text-white">
+              Blackout mode active: click cells to block or unblock.
+            </span>
+          )}
         </div>
       </div>
 
@@ -1800,6 +1905,7 @@ export default function AdminScheduleEditorPage() {
                         selectedCell?.person === person && selectedCell?.slotId === slot.id;
                       const saving = pendingCells.has(`${person}-${slot.id}`);
                       const cellExists = scheduleData.cellExists?.[rowIdx]?.[colIdx] ?? true;
+                      const isBlocked = Boolean(content.blocked);
 
                       const dropLine = (index: number) => (
                         <div
@@ -1831,10 +1937,16 @@ export default function AdminScheduleEditorPage() {
                             isSelected ? "bg-[#f0f4de]" : ""
                           } ${saving ? "animate-pulse" : ""} ${
                             cellExists ? "" : "opacity-60"
-                          }`}
+                          } ${isBlocked ? "bg-[#2f3b21]/10" : ""}`}
                           onClick={() => selectCell(person, slot)}
-                          onDragOver={(e) => handleDragOverEvent(e, person, slot.id, content.tasks.length)}
-                          onDragEnter={(e) => handleDragOverEvent(e, person, slot.id, content.tasks.length)}
+                          onDragOver={(e) => {
+                            if (isBlocked) return;
+                            handleDragOverEvent(e, person, slot.id, content.tasks.length);
+                          }}
+                          onDragEnter={(e) => {
+                            if (isBlocked) return;
+                            handleDragOverEvent(e, person, slot.id, content.tasks.length);
+                          }}
                           onDragLeave={(e) => {
                             e.preventDefault();
                             if (pendingInsert?.person === person && pendingInsert.slotId === slot.id) {
@@ -1842,15 +1954,23 @@ export default function AdminScheduleEditorPage() {
                             }
                           }}
                           onDrop={(e) => {
+                            if (isBlocked) return;
                             handleDropEvent(e, person, slot, content.tasks.length);
                             setPendingInsert(null);
                           }}
                         >
                           <div
                             className="flex h-full w-full flex-col gap-1"
-                            onDragOver={(e) => handleDragOverEvent(e, person, slot.id, content.tasks.length)}
-                            onDragEnter={(e) => handleDragOverEvent(e, person, slot.id, content.tasks.length)}
+                            onDragOver={(e) => {
+                              if (isBlocked) return;
+                              handleDragOverEvent(e, person, slot.id, content.tasks.length);
+                            }}
+                            onDragEnter={(e) => {
+                              if (isBlocked) return;
+                              handleDragOverEvent(e, person, slot.id, content.tasks.length);
+                            }}
                             onDrop={(e) => {
+                              if (isBlocked) return;
                               if (!cellExists) {
                                 setSaveLog({
                                   status: "error",
@@ -1873,124 +1993,138 @@ export default function AdminScheduleEditorPage() {
                                 🔒 Cell not loaded yet. Please wait for the schedule to finish syncing.
                               </div>
                             )}
-                            {dropLine(0)}
-                            {content.tasks.map((task, idx) => {
-                              const meta = taskMetaById.get(task.id);
-                              const isDraggingThis =
-                                draggingTask?.taskId === task.id &&
-                                draggingTask?.fromPerson === person &&
-                                draggingTask?.fromSlotId === slot.id;
-                              const assignedCount =
-                                taskPeopleCountById.byId.get(task.id) ??
-                                taskPeopleCountById.byName.get(task.name.trim().toLowerCase()) ??
-                                0;
-                              const neededCount = meta?.personCount ?? 0;
-                              const hasEnoughPeople =
-                                neededCount > 0 ? assignedCount >= neededCount : false;
+                            {isBlocked ? (
+                              <div className="flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-[#2f3b21]/40 bg-[#2f3b21]/10 px-2 py-3 text-center text-[11px] text-[#2f3b21]">
+                                <span className="text-base">🛑</span>
+                                <span className="font-semibold uppercase tracking-[0.12em]">
+                                  Blackout
+                                </span>
+                                <span className="text-[10px] text-[#4f5730]">
+                                  No scheduling in this slot
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                {dropLine(0)}
+                                {content.tasks.map((task, idx) => {
+                                  const meta = taskMetaById.get(task.id);
+                                  const isDraggingThis =
+                                    draggingTask?.taskId === task.id &&
+                                    draggingTask?.fromPerson === person &&
+                                    draggingTask?.fromSlotId === slot.id;
+                                  const assignedCount =
+                                    taskPeopleCountById.byId.get(task.id) ??
+                                    taskPeopleCountById.byName.get(task.name.trim().toLowerCase()) ??
+                                    0;
+                                  const neededCount = meta?.personCount ?? 0;
+                                  const hasEnoughPeople =
+                                    neededCount > 0 ? assignedCount >= neededCount : false;
 
-                              return (
-                                <React.Fragment key={`${person}-${slot.id}-${task.id}-${idx}`}>
-                                  <div
-                                    role="button"
-                                    tabIndex={0}
-                                    draggable
-                                    onDragStart={(e) => {
-                                      setDraggingTask({
-                                        taskId: task.id,
-                                        taskName: task.name,
-                                        fromPerson: person,
-                                        fromSlotId: slot.id,
-                                        fromIndex: idx,
-                                      });
-                                      e.dataTransfer.setData("text/task-name", task.name);
-                                      e.dataTransfer.setData("text/plain", task.name);
-                                      e.dataTransfer.setData(DRAG_DATA_TYPE, JSON.stringify({
-                                        taskId: task.id,
-                                        taskName: task.name,
-                                        fromPerson: person,
-                                        fromSlotId: slot.id,
-                                        fromIndex: idx,
-                                      }));
-                                      e.dataTransfer.effectAllowed = "move";
-                                    }}
-                                    onDragEnd={() => {
-                                      setDraggingTask(null);
-                                      setPendingInsert(null);
-                                    }}
-                                    onClick={() => {
-                                      selectCell(person, slot);
-                                      loadTaskDetail(task.id, task.name);
-                                    }}
+                                  return (
+                                    <React.Fragment key={`${person}-${slot.id}-${task.id}-${idx}`}>
+                                      <div
+                                        role="button"
+                                        tabIndex={0}
+                                        draggable
+                                        onDragStart={(e) => {
+                                          setDraggingTask({
+                                            taskId: task.id,
+                                            taskName: task.name,
+                                            fromPerson: person,
+                                            fromSlotId: slot.id,
+                                            fromIndex: idx,
+                                          });
+                                          e.dataTransfer.setData("text/task-name", task.name);
+                                          e.dataTransfer.setData("text/plain", task.name);
+                                          e.dataTransfer.setData(DRAG_DATA_TYPE, JSON.stringify({
+                                            taskId: task.id,
+                                            taskName: task.name,
+                                            fromPerson: person,
+                                            fromSlotId: slot.id,
+                                            fromIndex: idx,
+                                          }));
+                                          e.dataTransfer.effectAllowed = "move";
+                                        }}
+                                        onDragEnd={() => {
+                                          setDraggingTask(null);
+                                          setPendingInsert(null);
+                                        }}
+                                        onClick={() => {
+                                          selectCell(person, slot);
+                                          loadTaskDetail(task.id, task.name);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            selectCell(person, slot);
+                                            loadTaskDetail(task.id, task.name);
+                                          }
+                                        }}
+                                        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-left text-[11px] leading-snug shadow-sm transition duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-[#8fae4c] sm:text-[12px] ${typeColorClasses(
+                                          meta?.typeColor
+                                        )} ${isDraggingThis ? "scale-[1.02] shadow-md ring-2 ring-[#c8d99a]" : "hover:-translate-y-[1px]"}`}
+                                      >
+                                        <span className="line-clamp-2 font-semibold text-[#2f3b21]">
+                                          {task.name}
+                                        </span>
+                                        <span className="flex items-center gap-1 text-[9px] text-[#4f4f31]">
+                                          <span className="rounded-full bg-white/80 px-1.5 py-[1px] font-semibold">
+                                            {assignedCount}/{neededCount}
+                                          </span>
+                                          {hasEnoughPeople && (
+                                            <span className="text-sm text-emerald-600" title="Enough people assigned">
+                                              ✅
+                                            </span>
+                                          )}
+                                          <button
+                                            type="button"
+                                            draggable={false}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              removeTaskFromCell({ person, slotId: slot.id }, task, idx);
+                                            }}
+                                            onMouseDown={(e) => {
+                                              e.stopPropagation();
+                                            }}
+                                            className="rounded-full border border-[#d1d4aa] bg-white/80 px-1.5 py-[1px] text-[9px] font-semibold text-[#a05252] hover:bg-[#f7e3e3]"
+                                          >
+                                            ✕
+                                          </button>
+                                        </span>
+                                      </div>
+                                      {dropLine(idx + 1)}
+                                    </React.Fragment>
+                                  );
+                                })}
+
+                                {content.note && (
+                                  <p className="text-[10px] text-[#4f4b33] opacity-90">{content.note}</p>
+                                )}
+                                {isSelected && cellExists && (
+                                  <input
+                                    list="task-options"
+                                    value={customTask}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => setCustomTask(e.target.value)}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter" || e.key === " ") {
+                                      if (e.key === "Enter") {
                                         e.preventDefault();
-                                        selectCell(person, slot);
-                                        loadTaskDetail(task.id, task.name);
+                                        void handleCustomAdd();
+                                      }
+                                      if (e.key === "Escape") {
+                                        setCustomTask("");
                                       }
                                     }}
-                                    className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-left text-[11px] leading-snug shadow-sm transition duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-[#8fae4c] sm:text-[12px] ${typeColorClasses(
-                                      meta?.typeColor
-                                    )} ${isDraggingThis ? "scale-[1.02] shadow-md ring-2 ring-[#c8d99a]" : "hover:-translate-y-[1px]"}`}
-                                  >
-                                    <span className="line-clamp-2 font-semibold text-[#2f3b21]">
-                                      {task.name}
-                                    </span>
-                                    <span className="flex items-center gap-1 text-[9px] text-[#4f4f31]">
-                                      <span className="rounded-full bg-white/80 px-1.5 py-[1px] font-semibold">
-                                        {assignedCount}/{neededCount}
-                                      </span>
-                                      {hasEnoughPeople && (
-                                        <span className="text-sm text-emerald-600" title="Enough people assigned">
-                                          ✅
-                                        </span>
-                                      )}
-                                      <button
-                                        type="button"
-                                        draggable={false}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          removeTaskFromCell({ person, slotId: slot.id }, task, idx);
-                                        }}
-                                        onMouseDown={(e) => {
-                                          e.stopPropagation();
-                                        }}
-                                        className="rounded-full border border-[#d1d4aa] bg-white/80 px-1.5 py-[1px] text-[9px] font-semibold text-[#a05252] hover:bg-[#f7e3e3]"
-                                      >
-                                        ✕
-                                      </button>
-                                    </span>
-                                  </div>
-                                  {dropLine(idx + 1)}
-                                </React.Fragment>
-                              );
-                            })}
-
-                            {content.note && (
-                              <p className="text-[10px] text-[#4f4b33] opacity-90">{content.note}</p>
-                            )}
-                            {isSelected && cellExists && (
-                              <input
-                                list="task-options"
-                                value={customTask}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => setCustomTask(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    void handleCustomAdd();
-                                  }
-                                  if (e.key === "Escape") {
-                                    setCustomTask("");
-                                  }
-                                }}
-                                onBlur={() => {
-                                  if (customTask.trim()) {
-                                    void handleCustomAdd();
-                                  }
-                                }}
-                                placeholder="Type task + Enter"
-                                className="w-full rounded-full border border-[#d0c9a4] bg-white px-2 py-1 text-[10px] text-[#3f4630] focus:border-[#8fae4c] focus:outline-none"
-                              />
+                                    onBlur={() => {
+                                      if (customTask.trim()) {
+                                        void handleCustomAdd();
+                                      }
+                                    }}
+                                    placeholder="Type task + Enter"
+                                    className="w-full rounded-full border border-[#d0c9a4] bg-white px-2 py-1 text-[10px] text-[#3f4630] focus:border-[#8fae4c] focus:outline-none"
+                                  />
+                                )}
+                              </>
                             )}
                           </div>
                         </td>
@@ -2145,6 +2279,40 @@ export default function AdminScheduleEditorPage() {
                         </option>
                       ))}
                     </select>
+                    <div className="rounded-lg border border-[#e2d7b5] bg-white/80 p-2 text-[11px] text-[#4b5133]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">
+                        Recurring filters
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={showAllRecurring}
+                            onChange={(e) => setShowAllRecurring(e.target.checked)}
+                            className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                          />
+                          Show all recurring
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={hideCompletedRecurring}
+                            onChange={(e) => setHideCompletedRecurring(e.target.checked)}
+                            className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                          />
+                          Hide completed
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={hideFullyScheduledRecurring}
+                            onChange={(e) => setHideFullyScheduledRecurring(e.target.checked)}
+                            className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                          />
+                          Hide fully scheduled
+                        </label>
+                      </div>
+                    </div>
 
                     <div className="rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] p-2">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">
@@ -2558,64 +2726,100 @@ export default function AdminScheduleEditorPage() {
             </div>
             <div className="max-h-[55vh] overflow-y-auto px-4 py-3 pb-6">
               {mobileDockTab === "recurring" && (
-                <div className="mb-3 rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] p-3 text-sm">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">
-                    Quick recurring task
-                  </p>
-                  <div className="mt-2 space-y-2">
-                    <input
-                      value={recurringQuickName}
-                      onChange={(e) => setRecurringQuickName(e.target.value)}
-                      className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
-                      placeholder="Task name"
-                    />
-                    <textarea
-                      value={recurringQuickDescription}
-                      onChange={(e) => setRecurringQuickDescription(e.target.value)}
-                      className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
-                      placeholder="Task description"
-                      rows={2}
-                    />
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <input
-                        type="number"
-                        min={1}
-                        value={recurringQuickInterval}
-                        onChange={(e) =>
-                          setRecurringQuickInterval(Number(e.target.value) || 1)
-                        }
-                        className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
-                        placeholder="Every"
-                      />
-                      <select
-                        value={recurringQuickUnit}
-                        onChange={(e) => setRecurringQuickUnit(e.target.value)}
-                        className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
-                      >
-                        <option value="day">Day</option>
-                        <option value="month">Month</option>
-                        <option value="year">Year</option>
-                      </select>
+                <>
+                  <div className="mb-3 rounded-lg border border-[#e2d7b5] bg-white/90 p-3 text-[11px] text-[#4b5133]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">
+                      Recurring filters
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={showAllRecurring}
+                          onChange={(e) => setShowAllRecurring(e.target.checked)}
+                          className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                        />
+                        Show all recurring
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={hideCompletedRecurring}
+                          onChange={(e) => setHideCompletedRecurring(e.target.checked)}
+                          className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                        />
+                        Hide completed
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={hideFullyScheduledRecurring}
+                          onChange={(e) => setHideFullyScheduledRecurring(e.target.checked)}
+                          className="h-4 w-4 rounded border-[#b5bf90] text-[#5d7f3b] focus:ring-[#7a8c43]"
+                        />
+                        Hide fully scheduled
+                      </label>
                     </div>
-                    <input
-                      type="date"
-                      value={recurringQuickUntil}
-                      onChange={(e) => setRecurringQuickUntil(e.target.value)}
-                      className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={createRecurringQuickTask}
-                      disabled={!recurringQuickName.trim()}
-                      className="w-full rounded-md bg-[#6f8f3d] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white disabled:opacity-60"
-                    >
-                      Add recurring
-                    </button>
                   </div>
-                  <p className="mt-2 text-[10px] text-[#6b6d4b]">
-                    Defaults to a daily recurring task for 30 days if no end date is set.
-                  </p>
-                </div>
+                  <div className="mb-3 rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] p-3 text-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6a6c4d]">
+                      Quick recurring task
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      <input
+                        value={recurringQuickName}
+                        onChange={(e) => setRecurringQuickName(e.target.value)}
+                        className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
+                        placeholder="Task name"
+                      />
+                      <textarea
+                        value={recurringQuickDescription}
+                        onChange={(e) => setRecurringQuickDescription(e.target.value)}
+                        className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
+                        placeholder="Task description"
+                        rows={2}
+                      />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={recurringQuickInterval}
+                          onChange={(e) =>
+                            setRecurringQuickInterval(Number(e.target.value) || 1)
+                          }
+                          className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
+                          placeholder="Every"
+                        />
+                        <select
+                          value={recurringQuickUnit}
+                          onChange={(e) => setRecurringQuickUnit(e.target.value)}
+                          className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
+                        >
+                          <option value="day">Day</option>
+                          <option value="month">Month</option>
+                          <option value="year">Year</option>
+                        </select>
+                      </div>
+                      <input
+                        type="date"
+                        value={recurringQuickUntil}
+                        onChange={(e) => setRecurringQuickUntil(e.target.value)}
+                        className="w-full rounded-md border border-[#d0c9a4] px-2 py-2 text-xs focus:border-[#8fae4c] focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={createRecurringQuickTask}
+                        disabled={!recurringQuickName.trim()}
+                        className="w-full rounded-md bg-[#6f8f3d] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white disabled:opacity-60"
+                      >
+                        Add recurring
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[10px] text-[#6b6d4b]">
+                      Defaults to a daily recurring task for 30 days if no end date is set.
+                    </p>
+                  </div>
+                </>
               )}
               {mobileDockTab === "oneOff" && (
                 <div className="mb-3 rounded-lg border border-dashed border-[#d0c9a4] bg-[#f9f6e7] p-3 text-sm">
