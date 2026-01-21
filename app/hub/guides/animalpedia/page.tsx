@@ -1,6 +1,8 @@
 "use client";
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { loadSession } from "@/lib/session";
 
 type Animal = {
   id: string;
@@ -17,6 +19,7 @@ type Animal = {
   breed?: string;
   gender?: { name: string; color?: string };
   photos: { name: string; url: string }[];
+  stats?: Record<string, string | number | boolean>;
 };
 
 type Filters = {
@@ -123,6 +126,7 @@ function renderCareNotes(notes?: string): ReactNode {
 }
 
 export default function AnimalpediaPage() {
+  const searchParams = useSearchParams();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [filters, setFilters] = useState<Filters>({ types: [], genders: [] });
   const [loading, setLoading] = useState(true);
@@ -136,6 +140,21 @@ export default function AnimalpediaPage() {
   const [maxAge, setMaxAge] = useState<string>("");
   const [activeAnimal, setActiveAnimal] = useState<Animal | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [currentUserType, setCurrentUserType] = useState<string | null>(null);
+
+  useEffect(() => {
+    const session = loadSession();
+    setCurrentUserType(session?.userType || null);
+  }, []);
+
+  useEffect(() => {
+    const initialSearch = searchParams?.get("search") || "";
+    if (initialSearch) {
+      setSearch(initialSearch);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +256,7 @@ export default function AnimalpediaPage() {
   const handleOpen = (animal: Animal) => {
     setActiveAnimal(animal);
     setPhotoIndex(0);
+    setUploadError(null);
   };
 
   const nextPhoto = () => {
@@ -251,6 +271,54 @@ export default function AnimalpediaPage() {
       return (prev - 1 + activeAnimal.photos.length) % activeAnimal.photos.length;
     });
   };
+
+  const handlePhotoUpload = async (file: File) => {
+    if (!activeAnimal) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("animalId", activeAnimal.id);
+      formData.append("name", file.name);
+      const res = await fetch("/api/animals/photos", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to upload photo.");
+      }
+      const nextPhoto = { name: json.name || file.name, url: json.url };
+      setAnimals((prev) =>
+        prev.map((animal) =>
+          animal.id === activeAnimal.id
+            ? { ...animal, photos: [...animal.photos, nextPhoto] }
+            : animal
+        )
+      );
+      setActiveAnimal((prev) =>
+        prev ? { ...prev, photos: [...prev.photos, nextPhoto] } : prev
+      );
+    } catch (err: any) {
+      setUploadError(err?.message || "Unable to upload photo.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const isAdmin = (currentUserType || "").toLowerCase() === "admin";
+
+  const statsEntries = useMemo(() => {
+    if (!activeAnimal?.stats) return [];
+    return Object.entries(activeAnimal.stats)
+      .map(([key, value]) => ({
+        key,
+        label: key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+        value: String(value),
+      }))
+      .filter((entry) => entry.value.trim());
+  }, [activeAnimal]);
 
   return (
     <div className="space-y-6">
@@ -471,6 +539,38 @@ export default function AnimalpediaPage() {
                   </button>
                 </div>
 
+                {isAdmin && (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">
+                      Photo gallery
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#d0c9a4] bg-white px-3 py-1 text-xs font-semibold text-[#5a5436] shadow-sm">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) {
+                              handlePhotoUpload(file);
+                              event.currentTarget.value = "";
+                            }
+                          }}
+                          disabled={uploading}
+                        />
+                        {uploading ? "Uploading…" : "Upload photo"}
+                      </label>
+                      <span className="text-[11px] text-[#7a7f54]">
+                        JPG/PNG/WebP up to 300kb.
+                      </span>
+                    </div>
+                    {uploadError && (
+                      <p className="text-xs font-semibold text-red-700">{uploadError}</p>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Daily care notes</p>
                   <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
@@ -501,6 +601,23 @@ export default function AnimalpediaPage() {
                     <p className="text-[#7c7755]">{activeAnimal.getMilked ? "Gets milked" : "Does not get milked"}</p>
                   </div>
                 </div>
+
+                {statsEntries.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Stats</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {statsEntries.map((entry) => (
+                        <div
+                          key={entry.key}
+                          className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2"
+                        >
+                          <p className="font-semibold text-[#3f4926]">{entry.label}</p>
+                          <p className="text-[#5f5a3b]">{entry.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {activeAnimal.behaviors.length ? (
                   <div className="space-y-2">
