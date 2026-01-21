@@ -150,8 +150,6 @@ export default function AnimalpediaPage() {
     summary: "",
     dailyCareNotes: "",
     birthday: "",
-    ageLabel: "",
-    ageMonths: "",
     milkingMethod: "",
     getMilked: false,
     breed: "",
@@ -284,8 +282,6 @@ export default function AnimalpediaPage() {
       summary: animal.summary || "",
       dailyCareNotes: animal.dailyCareNotes || "",
       birthday: animal.birthday || "",
-      ageLabel: animal.ageLabel || "",
-      ageMonths: animal.ageMonths?.toString() || "",
       milkingMethod: animal.milkingMethod || "",
       getMilked: Boolean(animal.getMilked),
       breed: animal.breed || "",
@@ -387,8 +383,6 @@ export default function AnimalpediaPage() {
       summary: "",
       dailyCareNotes: "",
       birthday: "",
-      ageLabel: "",
-      ageMonths: "",
       milkingMethod: "",
       getMilked: false,
       breed: "",
@@ -415,6 +409,24 @@ export default function AnimalpediaPage() {
       }, {});
   };
 
+  const computeAge = (birthday?: string) => {
+    if (!birthday) return { ageMonths: null, ageLabel: "" };
+    const parsed = new Date(birthday);
+    if (Number.isNaN(parsed.getTime())) return { ageMonths: null, ageLabel: "" };
+    const now = new Date();
+    const months =
+      (now.getFullYear() - parsed.getFullYear()) * 12 + (now.getMonth() - parsed.getMonth());
+    const safeMonths = Math.max(0, months);
+    const years = Math.floor(safeMonths / 12);
+    const remainingMonths = safeMonths % 12;
+    const labelParts = [];
+    if (years > 0) labelParts.push(`${years} year${years === 1 ? "" : "s"}`);
+    if (remainingMonths > 0 || years === 0) {
+      labelParts.push(`${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`);
+    }
+    return { ageMonths: safeMonths, ageLabel: labelParts.join(" ") };
+  };
+
   const handleSaveAnimal = async () => {
     if (!draft.name.trim()) {
       setSaveError("Name is required.");
@@ -423,14 +435,15 @@ export default function AnimalpediaPage() {
     setSaving(true);
     setSaveError(null);
     try {
+      const { ageMonths, ageLabel } = computeAge(draft.birthday);
       const payload = {
         id: draft.id || undefined,
         name: draft.name.trim(),
         summary: draft.summary,
         dailyCareNotes: draft.dailyCareNotes,
         birthday: draft.birthday || null,
-        ageLabel: draft.ageLabel,
-        ageMonths: draft.ageMonths ? Number(draft.ageMonths) : null,
+        ageLabel,
+        ageMonths,
         milkingMethod: draft.milkingMethod,
         getMilked: draft.getMilked,
         breed: draft.breed,
@@ -725,7 +738,7 @@ export default function AnimalpediaPage() {
                 )}
 
                 {editing ? (
-                  <div className="space-y-3">
+                  <div className="max-h-[55vh] space-y-3 overflow-y-auto rounded-xl border border-[#efe7cf] bg-[#fbf9f0] p-4">
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <label className="flex flex-col gap-1">
                         <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Name</span>
@@ -740,25 +753,45 @@ export default function AnimalpediaPage() {
                       </label>
                       <label className="flex flex-col gap-1">
                         <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Type</span>
-                        <input
-                          type="text"
+                        <select
                           value={draft.typeName}
                           onChange={(event) =>
                             setDraft((prev) => ({ ...prev, typeName: event.target.value }))
                           }
                           className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
-                        />
+                        >
+                          <option value="">Select type</option>
+                          {filters.types.map((type) => (
+                            <option key={type.name} value={type.name}>
+                              {type.name}
+                            </option>
+                          ))}
+                          {draft.typeName &&
+                            !filters.types.some((type) => type.name === draft.typeName) && (
+                              <option value={draft.typeName}>{draft.typeName}</option>
+                            )}
+                        </select>
                       </label>
                       <label className="flex flex-col gap-1">
                         <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Gender</span>
-                        <input
-                          type="text"
+                        <select
                           value={draft.genderName}
                           onChange={(event) =>
                             setDraft((prev) => ({ ...prev, genderName: event.target.value }))
                           }
                           className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
-                        />
+                        >
+                          <option value="">Select gender</option>
+                          {filters.genders.map((gender) => (
+                            <option key={gender.name} value={gender.name}>
+                              {gender.name}
+                            </option>
+                          ))}
+                          {draft.genderName &&
+                            !filters.genders.some((gender) => gender.name === draft.genderName) && (
+                              <option value={draft.genderName}>{draft.genderName}</option>
+                            )}
+                        </select>
                       </label>
                       <label className="flex flex-col gap-1">
                         <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Breed</span>
@@ -808,43 +841,27 @@ export default function AnimalpediaPage() {
                           className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
                         />
                       </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Age label</span>
-                        <input
-                          type="text"
-                          value={draft.ageLabel}
-                          onChange={(event) =>
-                            setDraft((prev) => ({ ...prev, ageLabel: event.target.value }))
-                          }
-                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">
-                          Age (months)
+                      <div className="flex flex-col gap-1 rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]">
+                        <span className="uppercase tracking-[0.16em] text-[#7a7f54]">Age</span>
+                        <span className="text-sm text-[#4b5133]">
+                          {computeAge(draft.birthday).ageLabel || "Based on birthday"}
                         </span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={draft.ageMonths}
-                          onChange={(event) =>
-                            setDraft((prev) => ({ ...prev, ageMonths: event.target.value }))
-                          }
-                          className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
-                        />
-                      </label>
+                      </div>
                       <label className="flex flex-col gap-1">
                         <span className="uppercase tracking-[0.16em] text-[#7a7f54]">
                           Milking method
                         </span>
-                        <input
-                          type="text"
+                        <select
                           value={draft.milkingMethod}
                           onChange={(event) =>
                             setDraft((prev) => ({ ...prev, milkingMethod: event.target.value }))
                           }
                           className="rounded-md border border-[#d0c9a4] bg-white px-3 py-2 text-sm text-[#3d4425]"
-                        />
+                        >
+                          <option value="">Select method</option>
+                          <option value="Hand">Hand</option>
+                          <option value="Machine">Machine</option>
+                        </select>
                       </label>
                     </div>
                     <label className="flex items-center gap-2 text-xs font-semibold text-[#5a5436]">
@@ -945,7 +962,9 @@ export default function AnimalpediaPage() {
                   <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
                     <p className="font-semibold text-[#3f4926]">Birthday</p>
                     <p className="text-[#5f5a3b]">{formatDate(activeAnimal.birthday) || "Unknown"}</p>
-                    <p className="text-[#7c7755]">{activeAnimal.ageLabel || "Age not set"}</p>
+                    <p className="text-[#7c7755]">
+                      {computeAge(activeAnimal.birthday).ageLabel || "Age not set"}
+                    </p>
                   </div>
                   <div className="rounded-lg border border-[#e6dfbe] bg-[#f9f6e7] px-3 py-2">
                     <p className="font-semibold text-[#3f4926]">Type</p>
