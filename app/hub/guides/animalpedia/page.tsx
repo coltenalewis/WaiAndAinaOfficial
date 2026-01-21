@@ -1,7 +1,6 @@
 "use client";
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { loadSession } from "@/lib/session";
 
 type Animal = {
@@ -126,7 +125,6 @@ function renderCareNotes(notes?: string): ReactNode {
 }
 
 export default function AnimalpediaPage() {
-  const searchParams = useSearchParams();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [filters, setFilters] = useState<Filters>({ types: [], genders: [] });
   const [loading, setLoading] = useState(true);
@@ -150,11 +148,13 @@ export default function AnimalpediaPage() {
   }, []);
 
   useEffect(() => {
-    const initialSearch = searchParams?.get("search") || "";
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const initialSearch = params.get("search") || "";
     if (initialSearch) {
       setSearch(initialSearch);
     }
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
