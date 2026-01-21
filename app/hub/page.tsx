@@ -1787,6 +1787,18 @@ export default function HubSchedulePage() {
     return () => clearInterval(interval);
   }, [data]);
 
+  useEffect(() => {
+    if (!currentSlotId) return;
+    const container = scheduleScrollRef.current;
+    if (!container) return;
+    const headerCell = container.querySelector<HTMLElement>(
+      `th[data-slot-id="${currentSlotId}"]`
+    );
+    if (headerCell) {
+      headerCell.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [currentSlotId, scheduleDataToRender]);
+
   async function loadTaskDetails(
     taskName: string,
     opts: { quiet?: boolean; occurrenceDate?: string | null } = {}
@@ -5001,19 +5013,27 @@ function ScheduleGrid({
                   }`}
               >
                 <div className="flex items-center gap-2">
-                  <div>
-                    <div>{slot.label}</div>
-                    {slot.timeRange && (
-                      <div className="text-[10px] text-[#7a7f54] normal-case">
-                        {slot.timeRange}
-                      </div>
+                  <div
+                    className={
+                      isCurrent
+                        ? "inline-flex items-center gap-2 rounded-full border-2 border-[#88a94b] bg-white/80 px-2 py-1"
+                        : ""
+                    }
+                  >
+                    <div>
+                      <div>{slot.label}</div>
+                      {slot.timeRange && (
+                        <div className="text-[10px] text-[#7a7f54] normal-case">
+                          {slot.timeRange}
+                        </div>
+                      )}
+                    </div>
+                    {isCurrent && (
+                      <span className="inline-flex items-center rounded-full bg-[#eaf3d0] px-2 py-[1px] text-[9px] font-semibold text-[#476524]">
+                        Now
+                      </span>
                     )}
                   </div>
-                  {isCurrent && (
-                    <span className="inline-flex items-center rounded-full bg-white/80 px-2 py-[1px] text-[9px] font-semibold text-[#476524]">
-                      Now
-                    </span>
-                  )}
                 </div>
               </th>
             );

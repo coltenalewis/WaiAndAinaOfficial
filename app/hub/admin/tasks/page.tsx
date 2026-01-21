@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loadSession } from "@/lib/session";
 
@@ -71,6 +72,39 @@ const STATUS_COLORS: Record<string, string> = {
   "In Progress": "border-l-[#8fae4c] bg-[#f3f7e7]",
   Completed: "border-l-[#6fa3d9] bg-[#eef4fb]",
 };
+
+function renderTextWithAnimalLinks(text?: string | null): ReactNode {
+  if (!text) return "No description provided.";
+  const regex = /\[animal:([^\]]+)\]/gi;
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const prefix = text.slice(lastIndex, match.index);
+    if (prefix) {
+      parts.push(prefix);
+    }
+    const animalName = match[1].trim();
+    parts.push(
+      <Link
+        key={`${match.index}-${animalName}`}
+        href={`/hub/guides/animalpedia?search=${encodeURIComponent(animalName)}`}
+        className="font-semibold text-[#47612a] underline decoration-dotted"
+      >
+        🐾 {animalName}
+      </Link>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  const tail = text.slice(lastIndex);
+  if (tail) {
+    parts.push(tail);
+  }
+
+  return parts;
+}
 
 export default function TaskEditorPage() {
   const router = useRouter();
@@ -391,7 +425,7 @@ export default function TaskEditorPage() {
 
     try {
       if (editing?.id) {
-        await fetch("/api/tasks", {
+        const res = await fetch("/api/tasks", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -402,13 +436,21 @@ export default function TaskEditorPage() {
             ...payload,
           }),
         });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || "Unable to update task.");
+        }
         setMessage("Task updated.");
       } else {
-        await fetch("/api/tasks", {
+        const res = await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || "Unable to create task.");
+        }
         setMessage("Task created.");
       }
       setEditorOpen(false);
@@ -477,7 +519,7 @@ export default function TaskEditorPage() {
           }
         }
       }
-      await fetch("/api/tasks", {
+      const res = await fetch("/api/tasks", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -486,6 +528,10 @@ export default function TaskEditorPage() {
           occurrenceDate: deletePrompt.occurrenceDate,
         }),
       });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Unable to delete task.");
+      }
       setMessage("Task deleted.");
       setDeletePrompt({ task: null, mode: "single", occurrenceDate: null });
       await loadTasks();
@@ -662,7 +708,7 @@ export default function TaskEditorPage() {
                               {task.name}
                             </div>
                             <p className="mt-0.5 line-clamp-1 text-[9px] leading-tight text-[#6b6d4b]">
-                              {task.description || "No description provided."}
+                              {renderTextWithAnimalLinks(task.description)}
                             </p>
                           </div>
                           <div className="flex flex-row items-center gap-1.5 md:flex-col md:items-end">
@@ -730,7 +776,7 @@ export default function TaskEditorPage() {
                               {task.name}
                             </div>
                             <p className="mt-0.5 line-clamp-1 text-[9px] leading-tight text-[#6b6d4b]">
-                              {task.description || "No description provided."}
+                              {renderTextWithAnimalLinks(task.description)}
                             </p>
                           </div>
                           <div className="flex flex-row items-center gap-1.5 md:flex-col md:items-end">

@@ -316,12 +316,11 @@ export async function PATCH(req: Request) {
     ? normalizeCapabilityIds(capabilityIds)
     : null;
 
-  try {
-    if (applyTo === "single") {
+  const applyUpdates = async (query: Record<string, string>) => {
     try {
       await supabaseRequest("tasks", {
         method: "PATCH",
-        query: { id: `eq.${id}` },
+        query,
         body: updates,
       });
     } catch (err: any) {
@@ -331,13 +330,18 @@ export async function PATCH(req: Request) {
         delete (fallbackUpdates as Record<string, unknown>).comments;
         await supabaseRequest("tasks", {
           method: "PATCH",
-          query: { id: `eq.${id}` },
+          query,
           body: fallbackUpdates,
         });
       } else {
         throw err;
       }
     }
+  };
+
+  try {
+    if (applyTo === "single") {
+      await applyUpdates({ id: `eq.${id}` });
 
       if (updates.recurring === false && deleteOccurrences) {
         await supabaseRequest("tasks", {
@@ -370,38 +374,15 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const filters: Record<string, string> = {};
-    if (applyTo === "all") {
-      filters.or = `id.eq.${seriesRoot},parent_task_id.eq.${seriesRoot}`;
-    } else if (applyTo === "future") {
-      filters.or = `id.eq.${seriesRoot},parent_task_id.eq.${seriesRoot}`;
-      if (compareDate) {
-        filters.occurrence_date = `gte.${compareDate}`;
-      }
-    } else {
-      filters.id = `eq.${id}`;
+    const occurrenceFilters: Record<string, string> = {
+      parent_task_id: `eq.${seriesRoot}`,
+    };
+    if (applyTo === "future" && compareDate) {
+      occurrenceFilters.occurrence_date = `gte.${compareDate}`;
     }
 
-    try {
-      await supabaseRequest("tasks", {
-        method: "PATCH",
-        query: filters,
-        body: updates,
-      });
-    } catch (err: any) {
-      const message = String(err?.message || "");
-      if (message.includes("comments")) {
-        const fallbackUpdates = { ...updates };
-        delete (fallbackUpdates as Record<string, unknown>).comments;
-        await supabaseRequest("tasks", {
-          method: "PATCH",
-          query: filters,
-          body: fallbackUpdates,
-        });
-      } else {
-        throw err;
-      }
-    }
+    await applyUpdates({ id: `eq.${seriesRoot}` });
+    await applyUpdates(occurrenceFilters);
 
     if (updates.recurring === false && deleteOccurrences) {
       const deleteFilters: Record<string, string> = {};
@@ -421,10 +402,21 @@ export async function PATCH(req: Request) {
     }
 
     if (normalizedCapabilities) {
-      const updatedTasks = await supabaseRequest<any[]>("tasks", {
-        query: { select: "id", ...filters },
+      const occurrenceQuery: Record<string, string> = {
+        select: "id",
+        parent_task_id: `eq.${seriesRoot}`,
+      };
+      if (applyTo === "future" && compareDate) {
+        occurrenceQuery.occurrence_date = `gte.${compareDate}`;
+      }
+      const occurrences = await supabaseRequest<any[]>("tasks", {
+        query: occurrenceQuery,
       });
-      const taskIds = (updatedTasks || []).map((task) => task.id).filter(Boolean);
+      const taskIds = Array.from(
+        new Set(
+          [seriesRoot, ...(occurrences || []).map((task) => task.id)].filter(Boolean)
+        )
+      );
       await syncTaskCapabilities(taskIds, normalizedCapabilities);
     }
 
@@ -443,7 +435,11 @@ export async function DELETE(req: Request) {
     );
   }
   const body = await req.json().catch(() => null);
-  const { id, applyTo = "single", occurrenceDate } = body || {};
+  const url = new URL(req.url);
+  const id = body?.id || url.searchParams.get("id");
+  const applyTo = body?.applyTo || url.searchParams.get("applyTo") || "single";
+  const occurrenceDate =
+    body?.occurrenceDate || url.searchParams.get("occurrenceDate");
 
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -459,7 +455,11 @@ export async function DELETE(req: Request) {
     }
 
     const seriesData = await supabaseRequest<any[]>("tasks", {
-      query: { select: "id,parent_task_id,occurrence_date", id: `eq.${id}`, limit: 1 },
+      query: {
+        select: "id,parent_task_id,occurrence_date,origin_date",
+        id: `eq.${id}`,
+        limit: 1,
+      },
     });
     const target = seriesData?.[0];
     if (!target) {
@@ -467,22 +467,40 @@ export async function DELETE(req: Request) {
     }
 
     const seriesRoot = target.parent_task_id || target.id;
-    const compareDate = occurrenceDate || target.occurrence_date;
+    const compareDate =
+      occurrenceDate || target.occurrence_date || target.origin_date;
 
-    const filters: Record<string, string> = {};
-    if (applyTo === "all") {
-      filters.or = `id.eq.${seriesRoot},parent_task_id.eq.${seriesRoot}`;
-    } else {
-      filters.parent_task_id = `eq.${seriesRoot}`;
-      if (compareDate) {
-        filters.occurrence_date = `gte.${compareDate}`;
-      }
+    if (applyTo === "future" && !compareDate) {
+      return NextResponse.json(
+        { error: "Missing occurrence date for future deletes." },
+        { status: 400 }
+      );
+    }
+
+    const occurrenceFilters: Record<string, string> = {
+      parent_task_id: `eq.${seriesRoot}`,
+    };
+    if (applyTo === "future" && compareDate) {
+      occurrenceFilters.occurrence_date = `gte.${compareDate}`;
     }
 
     await supabaseRequest("tasks", {
       method: "DELETE",
-      query: filters,
+      query: occurrenceFilters,
     });
+
+    if (
+      applyTo === "all" ||
+      (applyTo === "future" &&
+        compareDate &&
+        target.occurrence_date &&
+        compareDate <= target.occurrence_date)
+    ) {
+      await supabaseRequest("tasks", {
+        method: "DELETE",
+        query: { id: `eq.${seriesRoot}` },
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
