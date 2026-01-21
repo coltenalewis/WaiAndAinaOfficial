@@ -196,7 +196,7 @@ export default function AnalyticsReportPage() {
         </div>
       </div>
 
-      <div className="print-page rounded-2xl border border-[#d6cfb3] bg-white p-8 shadow-[0_16px_40px_rgba(49,65,35,0.08)]">
+      <div className="print-page print-compact rounded-2xl border border-[#d6cfb3] bg-white p-8 shadow-[0_16px_40px_rgba(49,65,35,0.08)]">
         <div className="flex flex-col gap-6 border-b border-[#ece3c4] pb-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
@@ -308,8 +308,8 @@ export default function AnalyticsReportPage() {
             Task assignments by person and shift for {report.data.scheduleDate}.
           </p>
           <div className="mt-4 overflow-auto">
-            <table className="min-w-full border-collapse text-[11px]">
-              <thead className="bg-[#f5f1df] text-[10px] uppercase tracking-[0.14em] text-[#6b7247]">
+            <table className="min-w-full border-collapse text-[10px]">
+              <thead className="bg-[#f5f1df] text-[9px] uppercase tracking-[0.18em] text-[#6b7247]">
                 <tr>
                   <th className="border border-[#e0d6b8] px-3 py-2 text-left">Person</th>
                   {report.data.slots.map((slot) => (
@@ -340,7 +340,7 @@ export default function AnalyticsReportPage() {
                           className="border border-[#e0d6b8] px-2 py-2 text-[#4b5133]"
                         >
                           {tasks.length > 0 ? (
-                            <ul className="space-y-1">
+                            <ul className="space-y-0.5">
                               {tasks.map((task) => (
                                 <li key={`${person}-${slot.id}-${task}`} className="leading-snug">
                                   • {task}
@@ -351,7 +351,7 @@ export default function AnalyticsReportPage() {
                             <span className="text-[11px] text-[#9aa07b]">No tasks</span>
                           )}
                           {note && (
-                            <p className="mt-2 text-[10px] italic text-[#6a6c4d]">
+                            <p className="mt-1 text-[9px] italic text-[#6a6c4d]">
                               Note: {note}
                             </p>
                           )}
@@ -429,8 +429,8 @@ export default function AnalyticsReportPage() {
               Detailed task list captured for record keeping.
             </p>
             <div className="mt-4 overflow-auto rounded-2xl border border-[#e0d6b8] bg-white">
-              <table className="min-w-full border-collapse text-[11px]">
-                <thead className="bg-[#f5f1df] text-[10px] uppercase tracking-[0.14em] text-[#6b7247]">
+              <table className="min-w-full border-collapse text-[10px]">
+                <thead className="bg-[#f5f1df] text-[9px] uppercase tracking-[0.18em] text-[#6b7247]">
                   <tr>
                     <th className="border border-[#e0d6b8] px-3 py-2 text-left">Task</th>
                     <th className="border border-[#e0d6b8] px-3 py-2 text-left">Description</th>
@@ -457,22 +457,22 @@ export default function AnalyticsReportPage() {
                         <td className="border border-[#e0d6b8] px-3 py-2 text-[#4b5133]">
                           <div className="flex flex-wrap gap-2">
                             {task.priority && (
-                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px]">
+                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[9px]">
                                 Priority: {task.priority}
                               </span>
                             )}
                             {task.estimatedTime !== null && task.estimatedTime !== undefined && (
-                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px]">
+                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[9px]">
                                 Est. time: {task.estimatedTime} hrs
                               </span>
                             )}
                             {task.personCount !== null && task.personCount !== undefined && (
-                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px]">
+                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[9px]">
                                 People: {task.personCount}
                               </span>
                             )}
                             {task.timeSlots && task.timeSlots.length > 0 && (
-                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[10px]">
+                              <span className="rounded-full bg-[#f3f0e1] px-2 py-1 text-[9px]">
                                 Slots: {task.timeSlots.join(", ")}
                               </span>
                             )}

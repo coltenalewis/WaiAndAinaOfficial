@@ -149,4 +149,29 @@ body {
     border: none !important;
     padding: 0 !important;
   }
+
+  .print-compact {
+    font-size: 11px;
+  }
+
+  .print-compact table {
+    font-size: 10px;
+  }
+
+  .print-compact th,
+  .print-compact td {
+    padding: 4px 6px !important;
+  }
+
+  .print-compact h2 {
+    font-size: 20px !important;
+  }
+
+  .print-compact h3 {
+    font-size: 14px !important;
+  }
+
+  .print-compact h4 {
+    font-size: 12px !important;
+  }
 }
