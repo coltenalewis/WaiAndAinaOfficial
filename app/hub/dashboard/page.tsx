@@ -248,11 +248,15 @@ export default function WorkDashboardPage() {
           new Set(tasks.map((entry) => entry.name))
         ).filter(Boolean);
 
-        const [taskListRes, detailResults]: [
+        const [taskStatusRes, detailResults]: [
           Response,
           TaskDetail[]
         ] = await Promise.all([
-          fetch("/api/task?list=1"),
+          occurrenceParam
+            ? fetch(
+                `/api/tasks?includeOccurrences=true&start=${occurrenceParam}&end=${occurrenceParam}`
+              )
+            : Promise.resolve(new Response(JSON.stringify({ tasks: [] }))),
           Promise.all(
             uniqueTaskNames.map(async (taskName) => {
               const search = new URLSearchParams({ name: taskName });
@@ -287,13 +291,13 @@ export default function WorkDashboardPage() {
           ),
         ]);
 
-        const taskListJson = taskListRes.ok ? await taskListRes.json() : { tasks: [] };
-        const statusMap = new Map<string, string>(
-          (taskListJson.tasks || []).map((task: { name: string; status?: string }) => [
-            task.name,
-            task.status || "",
-          ])
-        );
+        const taskStatusJson = taskStatusRes.ok ? await taskStatusRes.json() : { tasks: [] };
+        const statusMap = new Map<string, string>();
+        (taskStatusJson.tasks || []).forEach((task: { name: string; status?: string }) => {
+          const key = task.name;
+          if (!key || statusMap.has(key)) return;
+          statusMap.set(key, task.status || "");
+        });
         const detailMap = new Map(detailResults.map((item) => [item.name, item]));
 
         const enrichedTasks = tasks.map((entry) => {

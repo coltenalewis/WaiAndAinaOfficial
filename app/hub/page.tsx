@@ -238,6 +238,7 @@ export default function HubSchedulePage() {
   const [customTablesLoading, setCustomTablesLoading] = useState(false);
   const [customTablesError, setCustomTablesError] = useState<string | null>(null);
   const [customTablesDirty, setCustomTablesDirty] = useState<Record<string, boolean>>({});
+  const [requestedDate, setRequestedDate] = useState<string | null>(null);
   const [customTablesSaving, setCustomTablesSaving] = useState<Record<string, boolean>>({});
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -344,6 +345,10 @@ export default function HubSchedulePage() {
     if (!scheduleDateObj) return null;
     return scheduleDateObj.toLocaleDateString("en-US", { weekday: "long" });
   }, [scheduleDateObj]);
+  const scheduleDateInputValue = useMemo(() => {
+    if (requestedDate) return requestedDate;
+    return toIsoDateLabel(scheduleDateLabel) || "";
+  }, [requestedDate, scheduleDateLabel]);
 
   const normalizeCustomTable = useCallback((table: any): CustomTable => {
     const columnHeaders = Array.isArray(table?.columnHeaders)
@@ -538,6 +543,32 @@ export default function HubSchedulePage() {
     }
     return "This schedule date is not today. Please confirm timing before starting.";
   }, [isScheduleYesterday, scheduleOutdated]);
+
+  const scheduleDateControls = (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-[#4b5133]">
+      <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6a6c4d]">
+        View date
+      </label>
+      <input
+        type="date"
+        value={scheduleDateInputValue}
+        onChange={(e) => setRequestedDate(e.target.value || null)}
+        className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-xs"
+      />
+      <button
+        type="button"
+        onClick={() => setRequestedDate(null)}
+        className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#4f5730] shadow-sm"
+      >
+        Today
+      </button>
+      {scheduleDayName && scheduleDateLabel && (
+        <span className="text-[11px] text-[#6a6c4d]">
+          {scheduleDayName} • {scheduleDateLabel}
+        </span>
+      )}
+    </div>
+  );
 
   const todayAssignments = useMemo(() => {
     if (!data || !currentUserName) return [];
@@ -954,7 +985,7 @@ export default function HubSchedulePage() {
 
   // Load schedule data from API (with auto-refresh)
   const loadSchedule = useCallback(
-    async (opts: { showLoading?: boolean; force?: boolean } = {}) => {
+    async (opts: { showLoading?: boolean; force?: boolean; dateOverride?: string | null } = {}) => {
       const { showLoading = false, force = false } = opts;
       const now = Date.now();
       if (scheduleFetchInFlight.current) return;
@@ -967,7 +998,11 @@ export default function HubSchedulePage() {
       setError(null);
 
       try {
-        const res = await fetch("/api/schedule", { cache: "no-store" });
+        const dateValue = opts.dateOverride ?? requestedDate;
+        const url = dateValue
+          ? `/api/schedule?date=${encodeURIComponent(dateValue)}`
+          : "/api/schedule";
+        const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -982,7 +1017,7 @@ export default function HubSchedulePage() {
         setLoading(false);
       }
     },
-    [scheduleRefreshIntervalMs]
+    [requestedDate, scheduleRefreshIntervalMs]
   );
 
   useEffect(() => {
@@ -1022,18 +1057,47 @@ export default function HubSchedulePage() {
       });
     });
 
-    const missing = Array.from(uniqueTasks).filter(
-      (name) => !taskMetaMap[name]
-    );
-    if (missing.length === 0) return;
+    const names = Array.from(uniqueTasks);
+    if (names.length === 0) return;
+    let cancelled = false;
+    const occurrenceParam = toIsoDateLabel(scheduleDateLabel) || scheduleDateLabel;
 
     (async () => {
-      const results = await Promise.all(
-        missing.map(async (name) => {
+      const taskLookup = new Map<string, TaskMeta>();
+      if (occurrenceParam) {
+        try {
+          const res = await fetch(
+            `/api/tasks?includeOccurrences=true&start=${occurrenceParam}&end=${occurrenceParam}`
+          );
+          if (res.ok) {
+            const json = await res.json();
+            (json.tasks || []).forEach((task: any) => {
+              const key = String(task?.name || "").trim().toLowerCase();
+              if (!key || taskLookup.has(key)) return;
+              taskLookup.set(key, {
+                status: task.status || "",
+                description: task.description || "",
+                typeName: task.task_type?.name || "",
+                typeColor: task.task_type?.color || "default",
+              });
+            });
+          }
+        } catch (err) {
+          console.error("Failed to preload task metadata for date", err);
+        }
+      }
+
+      const missingNames = names.filter(
+        (name) => !taskLookup.has(name.trim().toLowerCase())
+      );
+      const fallbackResults = await Promise.all(
+        missingNames.map(async (name) => {
           try {
-            const res = await fetch(
-              `/api/task?name=${encodeURIComponent(name)}`
-            );
+            const search = new URLSearchParams({ name });
+            if (occurrenceParam) {
+              search.set("occurrenceDate", occurrenceParam);
+            }
+            const res = await fetch(`/api/task?${search.toString()}`);
             if (!res.ok) return null;
             const json = await res.json();
             return {
@@ -1051,9 +1115,18 @@ export default function HubSchedulePage() {
         })
       );
 
+      if (cancelled) return;
+
       setTaskMetaMap((prev) => {
         const next = { ...prev } as Record<string, TaskMeta>;
-        results.forEach((item) => {
+        names.forEach((name) => {
+          const key = name.trim().toLowerCase();
+          const meta = taskLookup.get(key);
+          if (meta) {
+            next[name] = meta;
+          }
+        });
+        fallbackResults.forEach((item) => {
           if (item) {
             next[item.key] = {
               status: item.status,
@@ -1072,7 +1145,11 @@ export default function HubSchedulePage() {
         return next;
       });
     })();
-  }, [data, taskMetaMap]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data, scheduleDateLabel]);
 
   // Split slots
   const mealSlots = useMemo(
@@ -1752,6 +1829,18 @@ export default function HubSchedulePage() {
     return () => clearInterval(interval);
   }, [data]);
 
+  useEffect(() => {
+    if (!currentSlotId) return;
+    const container = scheduleScrollRef.current;
+    if (!container) return;
+    const headerCell = container.querySelector<HTMLElement>(
+      `th[data-slot-id="${currentSlotId}"]`
+    );
+    if (headerCell) {
+      headerCell.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [currentSlotId, scheduleDataToRender]);
+
   async function loadTaskDetails(
     taskName: string,
     opts: { quiet?: boolean; occurrenceDate?: string | null } = {}
@@ -2094,6 +2183,7 @@ export default function HubSchedulePage() {
             <p className="text-sm text-[#7a7f54]">
               Simple grid view for {scheduleDateLabel || "today"}.
             </p>
+            <div className="mt-2">{scheduleDateControls}</div>
           </div>
           {loading && (
             <p className="text-sm text-[#7a7f54]">Loading schedule…</p>
@@ -2307,6 +2397,7 @@ export default function HubSchedulePage() {
                     ? `Your assigned tasks for ${scheduleDateLabel || "today"}.`
                     : "Click any task to see its details and who you are assigned with."}
                 </p>
+                <div className="mt-2">{scheduleDateControls}</div>
               </div>
               <div className="flex items-center gap-2">
                 <div className="relative">
@@ -2622,42 +2713,62 @@ export default function HubSchedulePage() {
                                       className="border border-[#d0c9a4] bg-[#ece7d0] p-2 text-left text-[11px] uppercase tracking-[0.12em] text-[#6b6f4c]"
                                     >
                                       {isAdmin ? (
-                                        columnHeaderType === "text" ? (
-                                          <input
-                                            value={header}
-                                            onChange={(event) =>
-                                              updateCustomTableState(table.id, (prev) => {
-                                                const next = [...prev.columnHeaders];
-                                                next[colIdx] = event.target.value;
-                                                return { ...prev, columnHeaders: next };
-                                              })
+                                        <div className="flex items-center gap-2">
+                                          {columnHeaderType === "text" ? (
+                                            <input
+                                              value={header}
+                                              onChange={(event) =>
+                                                updateCustomTableState(table.id, (prev) => {
+                                                  const next = [...prev.columnHeaders];
+                                                  next[colIdx] = event.target.value;
+                                                  return { ...prev, columnHeaders: next };
+                                                })
+                                              }
+                                              className="w-full bg-transparent text-[11px] font-semibold text-[#4b5133]"
+                                              placeholder={`Column ${colIdx + 1}`}
+                                            />
+                                          ) : (
+                                            <select
+                                              value={header}
+                                              onChange={(event) =>
+                                                updateCustomTableState(table.id, (prev) => {
+                                                  const next = [...prev.columnHeaders];
+                                                  next[colIdx] = event.target.value;
+                                                  return { ...prev, columnHeaders: next };
+                                                })
+                                              }
+                                              className="w-full rounded-md border border-[#d0c9a4] bg-white/90 px-2 py-1 text-[11px] font-semibold text-[#4b5133]"
+                                            >
+                                              <option value="">—</option>
+                                              {(columnHeaderType === "user"
+                                                ? userOptions
+                                                : taskNameOptions
+                                              ).map((name) => (
+                                                <option key={`${table.id}-col-${name}`} value={name}>
+                                                  {name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              updateCustomTableState(table.id, (prev) => ({
+                                                ...prev,
+                                                columnHeaders: prev.columnHeaders.filter(
+                                                  (_, index) => index !== colIdx
+                                                ),
+                                                cells: prev.cells.map((row) =>
+                                                  row.filter((_, index) => index !== colIdx)
+                                                ),
+                                              }))
                                             }
-                                            className="w-full bg-transparent text-[11px] font-semibold text-[#4b5133]"
-                                            placeholder={`Column ${colIdx + 1}`}
-                                          />
-                                        ) : (
-                                          <select
-                                            value={header}
-                                            onChange={(event) =>
-                                              updateCustomTableState(table.id, (prev) => {
-                                                const next = [...prev.columnHeaders];
-                                                next[colIdx] = event.target.value;
-                                                return { ...prev, columnHeaders: next };
-                                              })
-                                            }
-                                            className="w-full rounded-md border border-[#d0c9a4] bg-white/90 px-2 py-1 text-[11px] font-semibold text-[#4b5133]"
+                                            className="rounded-full border border-red-200 bg-white/80 px-2 py-[2px] text-[10px] font-semibold text-red-700"
+                                            aria-label={`Delete column ${colIdx + 1}`}
                                           >
-                                            <option value="">—</option>
-                                            {(columnHeaderType === "user"
-                                              ? userOptions
-                                              : taskNameOptions
-                                            ).map((name) => (
-                                              <option key={`${table.id}-col-${name}`} value={name}>
-                                                {name}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        )
+                                            ✕
+                                          </button>
+                                        </div>
                                       ) : columnHeaderType === "text" ? (
                                         <span className="font-semibold text-[#4b5133]">
                                           {header || `Column ${colIdx + 1}`}
@@ -2721,42 +2832,60 @@ export default function HubSchedulePage() {
                                   <tr key={`${table.id}-row-${rowIdx}`}>
                                     <th className="border border-[#d0c9a4] bg-[#ece7d0] p-2 text-left text-[11px] uppercase tracking-[0.12em] text-[#6b6f4c]">
                                       {isAdmin ? (
-                                        rowHeaderType === "text" ? (
-                                          <input
-                                            value={rowHeader}
-                                            onChange={(event) =>
-                                              updateCustomTableState(table.id, (prev) => {
-                                                const next = [...prev.rowHeaders];
-                                                next[rowIdx] = event.target.value;
-                                                return { ...prev, rowHeaders: next };
-                                              })
+                                        <div className="flex items-center gap-2">
+                                          {rowHeaderType === "text" ? (
+                                            <input
+                                              value={rowHeader}
+                                              onChange={(event) =>
+                                                updateCustomTableState(table.id, (prev) => {
+                                                  const next = [...prev.rowHeaders];
+                                                  next[rowIdx] = event.target.value;
+                                                  return { ...prev, rowHeaders: next };
+                                                })
+                                              }
+                                              className="w-full bg-transparent text-[11px] font-semibold text-[#4b5133]"
+                                              placeholder={`Row ${rowIdx + 1}`}
+                                            />
+                                          ) : (
+                                            <select
+                                              value={rowHeader}
+                                              onChange={(event) =>
+                                                updateCustomTableState(table.id, (prev) => {
+                                                  const next = [...prev.rowHeaders];
+                                                  next[rowIdx] = event.target.value;
+                                                  return { ...prev, rowHeaders: next };
+                                                })
+                                              }
+                                              className="w-full rounded-md border border-[#d0c9a4] bg-white/90 px-2 py-1 text-[11px] font-semibold text-[#4b5133]"
+                                            >
+                                              <option value="">—</option>
+                                              {(rowHeaderType === "user"
+                                                ? userOptions
+                                                : taskNameOptions
+                                              ).map((name) => (
+                                                <option key={`${table.id}-row-${name}`} value={name}>
+                                                  {name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              updateCustomTableState(table.id, (prev) => ({
+                                                ...prev,
+                                                rowHeaders: prev.rowHeaders.filter(
+                                                  (_, index) => index !== rowIdx
+                                                ),
+                                                cells: prev.cells.filter((_, index) => index !== rowIdx),
+                                              }))
                                             }
-                                            className="w-full bg-transparent text-[11px] font-semibold text-[#4b5133]"
-                                            placeholder={`Row ${rowIdx + 1}`}
-                                          />
-                                        ) : (
-                                          <select
-                                            value={rowHeader}
-                                            onChange={(event) =>
-                                              updateCustomTableState(table.id, (prev) => {
-                                                const next = [...prev.rowHeaders];
-                                                next[rowIdx] = event.target.value;
-                                                return { ...prev, rowHeaders: next };
-                                              })
-                                            }
-                                            className="w-full rounded-md border border-[#d0c9a4] bg-white/90 px-2 py-1 text-[11px] font-semibold text-[#4b5133]"
+                                            className="rounded-full border border-red-200 bg-white/80 px-2 py-[2px] text-[10px] font-semibold text-red-700"
+                                            aria-label={`Delete row ${rowIdx + 1}`}
                                           >
-                                            <option value="">—</option>
-                                            {(rowHeaderType === "user"
-                                              ? userOptions
-                                              : taskNameOptions
-                                            ).map((name) => (
-                                              <option key={`${table.id}-row-${name}`} value={name}>
-                                                {name}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        )
+                                            ✕
+                                          </button>
+                                        </div>
                                       ) : rowHeaderType === "text" ? (
                                         <span className="font-semibold text-[#4b5133]">
                                           {rowHeader || `Row ${rowIdx + 1}`}
@@ -4964,19 +5093,27 @@ function ScheduleGrid({
                   }`}
               >
                 <div className="flex items-center gap-2">
-                  <div>
-                    <div>{slot.label}</div>
-                    {slot.timeRange && (
-                      <div className="text-[10px] text-[#7a7f54] normal-case">
-                        {slot.timeRange}
-                      </div>
+                  <div
+                    className={
+                      isCurrent
+                        ? "inline-flex items-center gap-2 rounded-full border-2 border-[#88a94b] bg-white/80 px-2 py-1"
+                        : ""
+                    }
+                  >
+                    <div>
+                      <div>{slot.label}</div>
+                      {slot.timeRange && (
+                        <div className="text-[10px] text-[#7a7f54] normal-case">
+                          {slot.timeRange}
+                        </div>
+                      )}
+                    </div>
+                    {isCurrent && (
+                      <span className="inline-flex items-center rounded-full bg-[#eaf3d0] px-2 py-[1px] text-[9px] font-semibold text-[#476524]">
+                        Now
+                      </span>
                     )}
                   </div>
-                  {isCurrent && (
-                    <span className="inline-flex items-center rounded-full bg-white/80 px-2 py-[1px] text-[9px] font-semibold text-[#476524]">
-                      Now
-                    </span>
-                  )}
                 </div>
               </th>
             );
