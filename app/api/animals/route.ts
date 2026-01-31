@@ -55,7 +55,7 @@ export async function GET() {
       supabaseRequest<any[]>("animals", {
         query: {
           select:
-            "id,name,summary,daily_care_notes,birthday,age_label,age_months,milking_method,get_milked,breed,behaviors,stats,animal_type:animal_types(id,name,color),animal_gender:animal_genders(id,name,color),animal_photos:animal_photos(id,name,path,created_at)",
+            "id,name,summary,daily_care_notes,birthday,arrival_date,age_label,age_months,status,location,tag_id,microchip_id,health_status,weight_lbs,milking_method,get_milked,breed,behaviors,stats,sire:animals!animals_sire_id_fkey(id,name),dam:animals!animals_dam_id_fkey(id,name),animal_type:animal_types(id,name,color),animal_gender:animal_genders(id,name,color),animal_photos:animal_photos(id,name,path,created_at)",
           order: "name.asc",
         },
       }),
@@ -84,8 +84,15 @@ export async function GET() {
           summary: animal.summary || "",
           dailyCareNotes: animal.daily_care_notes || "",
           birthday: animal.birthday,
+          arrivalDate: animal.arrival_date,
           ageLabel: animal.age_label,
           ageMonths: animal.age_months ?? null,
+          status: animal.status || "",
+          location: animal.location || "",
+          tagId: animal.tag_id || "",
+          microchipId: animal.microchip_id || "",
+          healthStatus: animal.health_status || "",
+          weightLbs: animal.weight_lbs ?? null,
           milkingMethod: animal.milking_method || "",
           getMilked: Boolean(animal.get_milked),
           type: animal.animal_type
@@ -96,6 +103,8 @@ export async function GET() {
           gender: animal.animal_gender
             ? { name: animal.animal_gender.name, color: animal.animal_gender.color }
             : undefined,
+          sire: animal.sire ? { id: animal.sire.id, name: animal.sire.name } : null,
+          dam: animal.dam ? { id: animal.dam.id, name: animal.dam.name } : null,
           photos,
           stats: animal.stats || {},
         };
@@ -139,8 +148,15 @@ function normalizeAnimalRecord(animal: any, photos: { name: string; url: string 
     summary: animal.summary || "",
     dailyCareNotes: animal.daily_care_notes || "",
     birthday: animal.birthday,
+    arrivalDate: animal.arrival_date,
     ageLabel: animal.age_label,
     ageMonths: animal.age_months ?? null,
+    status: animal.status || "",
+    location: animal.location || "",
+    tagId: animal.tag_id || "",
+    microchipId: animal.microchip_id || "",
+    healthStatus: animal.health_status || "",
+    weightLbs: animal.weight_lbs ?? null,
     milkingMethod: animal.milking_method || "",
     getMilked: Boolean(animal.get_milked),
     type: animal.animal_type
@@ -151,6 +167,8 @@ function normalizeAnimalRecord(animal: any, photos: { name: string; url: string 
     gender: animal.animal_gender
       ? { name: animal.animal_gender.name, color: animal.animal_gender.color }
       : undefined,
+    sire: animal.sire ? { id: animal.sire.id, name: animal.sire.name } : null,
+    dam: animal.dam ? { id: animal.dam.id, name: animal.dam.name } : null,
     photos,
     stats: animal.stats || {},
   };
@@ -181,8 +199,15 @@ export async function POST(req: Request) {
       summary: body?.summary || null,
       daily_care_notes: body?.dailyCareNotes || null,
       birthday: body?.birthday || null,
+      arrival_date: body?.arrivalDate || null,
       age_label: body?.ageLabel || null,
       age_months: Number.isFinite(body?.ageMonths) ? body.ageMonths : null,
+      status: body?.status || null,
+      location: body?.location || null,
+      tag_id: body?.tagId || null,
+      microchip_id: body?.microchipId || null,
+      health_status: body?.healthStatus || null,
+      weight_lbs: Number.isFinite(body?.weightLbs) ? body.weightLbs : null,
       milking_method: body?.milkingMethod || null,
       get_milked: Boolean(body?.getMilked),
       breed: body?.breed || null,
@@ -190,10 +215,12 @@ export async function POST(req: Request) {
       stats: body?.stats || {},
       animal_type_id: typeId,
       animal_gender_id: genderId,
+      sire_id: body?.sireId || null,
+      dam_id: body?.damId || null,
     },
     query: {
       select:
-        "id,name,summary,daily_care_notes,birthday,age_label,age_months,milking_method,get_milked,breed,behaviors,stats,animal_type:animal_types(id,name,color),animal_gender:animal_genders(id,name,color)",
+        "id,name,summary,daily_care_notes,birthday,arrival_date,age_label,age_months,status,location,tag_id,microchip_id,health_status,weight_lbs,milking_method,get_milked,breed,behaviors,stats,sire:animals!animals_sire_id_fkey(id,name),dam:animals!animals_dam_id_fkey(id,name),animal_type:animal_types(id,name,color),animal_gender:animal_genders(id,name,color)",
     },
   });
 
@@ -228,9 +255,17 @@ export async function PATCH(req: Request) {
   if ("summary" in (body || {})) updates.summary = body.summary || null;
   if ("dailyCareNotes" in (body || {})) updates.daily_care_notes = body.dailyCareNotes || null;
   if ("birthday" in (body || {})) updates.birthday = body.birthday || null;
+  if ("arrivalDate" in (body || {})) updates.arrival_date = body.arrivalDate || null;
   if ("ageLabel" in (body || {})) updates.age_label = body.ageLabel || null;
   if ("ageMonths" in (body || {}))
     updates.age_months = Number.isFinite(body.ageMonths) ? body.ageMonths : null;
+  if ("status" in (body || {})) updates.status = body.status || null;
+  if ("location" in (body || {})) updates.location = body.location || null;
+  if ("tagId" in (body || {})) updates.tag_id = body.tagId || null;
+  if ("microchipId" in (body || {})) updates.microchip_id = body.microchipId || null;
+  if ("healthStatus" in (body || {})) updates.health_status = body.healthStatus || null;
+  if ("weightLbs" in (body || {}))
+    updates.weight_lbs = Number.isFinite(body.weightLbs) ? body.weightLbs : null;
   if ("milkingMethod" in (body || {})) updates.milking_method = body.milkingMethod || null;
   if ("getMilked" in (body || {})) updates.get_milked = Boolean(body.getMilked);
   if ("breed" in (body || {})) updates.breed = body.breed || null;
@@ -238,6 +273,8 @@ export async function PATCH(req: Request) {
   if ("stats" in (body || {})) updates.stats = body.stats || {};
   if (typeId !== null) updates.animal_type_id = typeId;
   if (genderId !== null) updates.animal_gender_id = genderId;
+  if ("sireId" in (body || {})) updates.sire_id = body.sireId || null;
+  if ("damId" in (body || {})) updates.dam_id = body.damId || null;
 
   await supabaseRequest("animals", {
     method: "PATCH",
@@ -248,7 +285,7 @@ export async function PATCH(req: Request) {
   const [updated] = await supabaseRequest<any[]>("animals", {
     query: {
       select:
-        "id,name,summary,daily_care_notes,birthday,age_label,age_months,milking_method,get_milked,breed,behaviors,stats,animal_type:animal_types(id,name,color),animal_gender:animal_genders(id,name,color),animal_photos:animal_photos(id,name,path,created_at)",
+        "id,name,summary,daily_care_notes,birthday,arrival_date,age_label,age_months,status,location,tag_id,microchip_id,health_status,weight_lbs,milking_method,get_milked,breed,behaviors,stats,sire:animals!animals_sire_id_fkey(id,name),dam:animals!animals_dam_id_fkey(id,name),animal_type:animal_types(id,name,color),animal_gender:animal_genders(id,name,color),animal_photos:animal_photos(id,name,path,created_at)",
       id: `eq.${id}`,
     },
   });
