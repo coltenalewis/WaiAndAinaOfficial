@@ -5,6 +5,7 @@ import { getOrCreateDeviceId } from "@/lib/pushClient";
 
 const HOMESCREEN_DISMISS_KEY = "waianda_homescreen_dismissed";
 const NOTIFICATION_DISMISS_KEY = "waianda_notification_dismissed";
+const NOTIFICATION_USER_KEY = "waianda_notification_user";
 
 type PushNotificationManagerProps = {
   userName: string;
@@ -91,6 +92,26 @@ export function PushNotificationManager({
       setShowNotificationPrompt(true);
     }
   }, [installed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!userName) {
+      localStorage.removeItem(NOTIFICATION_USER_KEY);
+      return;
+    }
+    const previousUser = localStorage.getItem(NOTIFICATION_USER_KEY);
+    if (previousUser && previousUser !== userName) {
+      localStorage.removeItem(NOTIFICATION_DISMISS_KEY);
+      if (installed && supportsPush()) {
+        const permission = Notification.permission;
+        setPermissionState(permission);
+        if (permission === "default") {
+          setShowNotificationPrompt(true);
+        }
+      }
+    }
+    localStorage.setItem(NOTIFICATION_USER_KEY, userName);
+  }, [installed, userName]);
 
   useEffect(() => {
     if (!supportsPush()) return;
