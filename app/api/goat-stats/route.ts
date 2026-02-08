@@ -31,12 +31,12 @@ const rollDice = () => [
 
 const SLOT_SYMBOLS = ["🐐", "🐓", "🐄", "🐑", "🌽", "🥕"] as const;
 const PLINKO_BUCKETS: Array<{ label: string; multiplier: number; weight: number }> = [
-  { label: "🌾", multiplier: 0, weight: 1 },
+  { label: "🌾", multiplier: 0, weight: 4 },
   { label: "🐐", multiplier: 1, weight: 2 },
-  { label: "🐓", multiplier: 1.5, weight: 3 },
-  { label: "🐑", multiplier: 2, weight: 4 },
-  { label: "🐄", multiplier: 3, weight: 3 },
-  { label: "🧀", multiplier: 5, weight: 2 },
+  { label: "🐓", multiplier: 1.5, weight: 2 },
+  { label: "🐑", multiplier: 2, weight: 2 },
+  { label: "🐄", multiplier: 3, weight: 1 },
+  { label: "🧀", multiplier: 5, weight: 1 },
 ];
 
 function pickWeightedBucket() {
@@ -95,11 +95,13 @@ export async function GET() {
 
 export async function POST(req: Request) {
   let body: {
-    action?: "run" | "dice" | "slots" | "plinko";
+    action?: "run" | "dice" | "slots" | "plinko" | "climb" | "hop";
     name?: string;
     score?: number;
     betType?: "LOW" | "SEVEN" | "HIGH";
     betAmount?: number;
+    multiplier?: number;
+    win?: boolean;
   };
 
   try {
@@ -196,6 +198,30 @@ export async function POST(req: Request) {
         payload.multiplier = bucket.multiplier;
         payload.payout = payout;
         payload.win = win;
+        payload.betAmount = betAmount;
+      }
+
+      if (action === "climb") {
+        const multiplier = Math.max(1, Number(body.multiplier || 1));
+        const win = Boolean(body.win);
+        const payout = win ? Math.floor(betAmount * multiplier) : 0;
+        nextGoats = currentGoats - betAmount + payout;
+        payload.multiplier = multiplier;
+        payload.payout = payout;
+        payload.win = win;
+        payload.betAmount = betAmount;
+      }
+
+      if (action === "hop") {
+        const multiplier = Math.max(1, Number(body.multiplier || 1));
+        const win = Boolean(body.win);
+        const payout = win ? Math.floor(betAmount * multiplier) : 0;
+        const loss = win ? betAmount : Math.floor(betAmount * multiplier);
+        nextGoats = currentGoats - loss + payout;
+        payload.multiplier = multiplier;
+        payload.payout = payout;
+        payload.win = win;
+        payload.loss = loss;
         payload.betAmount = betAmount;
       }
     }

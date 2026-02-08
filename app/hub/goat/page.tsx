@@ -46,6 +46,23 @@ type PlinkoResult = {
   error?: string;
 };
 
+type ClimbResult = {
+  payout?: number;
+  win?: boolean;
+  multiplier?: number;
+  betAmount?: number;
+  error?: string;
+};
+
+type HopResult = {
+  payout?: number;
+  win?: boolean;
+  multiplier?: number;
+  betAmount?: number;
+  loss?: number;
+  error?: string;
+};
+
 type RunSummary = {
   score: number;
   earned: number;
@@ -103,6 +120,12 @@ function parseGoatAmount(rawValue: string) {
       bill: 1_000_000_000,
       billion: 1_000_000_000,
       t: 1_000_000_000_000,
+      tn: 1_000_000_000_000,
+      tr: 1_000_000_000_000,
+      trn: 1_000_000_000_000,
+      trl: 1_000_000_000_000,
+      trill: 1_000_000_000_000,
+      triln: 1_000_000_000_000,
       tril: 1_000_000_000_000,
       trillion: 1_000_000_000_000,
     };
@@ -286,7 +309,7 @@ export default function GoatArcadePage() {
   const [message, setMessage] = useState<string>("Tap or press space to leap fences!");
   const [canvasSize, setCanvasSize] = useState({ width: 760, height: MIN_HEIGHT });
   const [activeGame, setActiveGame] =
-    useState<"run" | "dice" | "slots" | "plinko">("run");
+    useState<"run" | "dice" | "slots" | "plinko" | "climb" | "hop">("run");
   const [name, setName] = useState<string>("");
   const [stats, setStats] = useState<StatsState>({
     goats: 0,
@@ -313,6 +336,21 @@ export default function GoatArcadePage() {
   const [plinkoDropping, setPlinkoDropping] = useState(false);
   const [plinkoStep, setPlinkoStep] = useState(0);
   const [plinkoOffsets, setPlinkoOffsets] = useState<number[]>([]);
+  const plinkoStepTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const plinkoFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [climbBetAmount, setClimbBetAmount] = useState<string>("5");
+  const [climbResult, setClimbResult] = useState<ClimbResult>({});
+  const [climbStatus, setClimbStatus] = useState<"idle" | "running" | "crashed" | "cashed">(
+    "idle"
+  );
+  const [climbMultiplier, setClimbMultiplier] = useState(1);
+  const climbCrashPointRef = useRef<number>(2.2);
+  const climbTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [hopBetAmount, setHopBetAmount] = useState<string>("5");
+  const [hopResult, setHopResult] = useState<HopResult>({});
+  const [hopStatus, setHopStatus] = useState<"idle" | "running" | "dead" | "cashed">("idle");
+  const [hopMultiplier, setHopMultiplier] = useState(1);
+  const [hopJumps, setHopJumps] = useState(0);
 
   useEffect(() => {
     const session = loadSession();
@@ -383,6 +421,10 @@ export default function GoatArcadePage() {
       stopGame();
       setStatus("idle");
       setMessage("Tap or press space to leap fences!");
+    }
+    if (activeGame !== "climb" && climbTimerRef.current) {
+      clearInterval(climbTimerRef.current);
+      climbTimerRef.current = null;
     }
   }, [activeGame]);
 
@@ -794,7 +836,14 @@ export default function GoatArcadePage() {
     setPlinkoStep(0);
     setPlinkoOffsets([]);
 
-    let stepTimeout: ReturnType<typeof setTimeout> | null = null;
+    if (plinkoStepTimeoutRef.current) {
+      clearTimeout(plinkoStepTimeoutRef.current);
+      plinkoStepTimeoutRef.current = null;
+    }
+    if (plinkoFinishTimeoutRef.current) {
+      clearTimeout(plinkoFinishTimeoutRef.current);
+      plinkoFinishTimeoutRef.current = null;
+    }
 
     try {
       const res = await fetch("/api/goat-stats", {
@@ -831,31 +880,195 @@ export default function GoatArcadePage() {
         if (step < path.length - 1) {
           const travel = step / Math.max(path.length - 1, 1);
           const delay = 90 + Math.sin(travel * Math.PI) * 90 + Math.random() * 25;
-          stepTimeout = setTimeout(scheduleStep, delay);
+          plinkoStepTimeoutRef.current = setTimeout(scheduleStep, delay);
         }
       };
-      stepTimeout = setTimeout(scheduleStep, 120);
+      plinkoStepTimeoutRef.current = setTimeout(scheduleStep, 120);
 
-      setTimeout(() => {
-      setPlinkoResult({
-        bucket: data.bucket,
-        payout: data.payout,
-        win: data.win,
-        multiplier: data.multiplier,
-        betAmount: data.betAmount,
-        capped: data.capped,
-        cap: data.cap,
-      });
+      plinkoFinishTimeoutRef.current = setTimeout(() => {
+        setPlinkoResult({
+          bucket: data.bucket,
+          payout: data.payout,
+          win: data.win,
+          multiplier: data.multiplier,
+          betAmount: data.betAmount,
+          capped: data.capped,
+          cap: data.cap,
+        });
         setPlinkoDropping(false);
-        if (stepTimeout) clearTimeout(stepTimeout);
+        if (plinkoStepTimeoutRef.current) {
+          clearTimeout(plinkoStepTimeoutRef.current);
+          plinkoStepTimeoutRef.current = null;
+        }
         setPlinkoStep(path.length - 1);
       }, steps * 180);
     } catch (err) {
       console.error(err);
       setPlinkoResult({ error: "Something went wrong." });
       setPlinkoDropping(false);
-      if (stepTimeout) clearTimeout(stepTimeout);
+      if (plinkoStepTimeoutRef.current) {
+        clearTimeout(plinkoStepTimeoutRef.current);
+        plinkoStepTimeoutRef.current = null;
+      }
     }
+  };
+
+  const settleClimbRound = async (bet: number, multiplier: number, win: boolean) => {
+    try {
+      const res = await fetch("/api/goat-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "climb",
+          name,
+          betAmount: bet,
+          multiplier,
+          win,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setClimbResult({ error: data?.error || "Failed to settle climb." });
+        return;
+      }
+      syncStatsFromPayload(data);
+      setClimbResult({
+        payout: data.payout,
+        win: data.win,
+        multiplier: data.multiplier,
+        betAmount: data.betAmount,
+      });
+    } catch (err) {
+      console.error(err);
+      setClimbResult({ error: "Something went wrong." });
+    }
+  };
+
+  const handleClimbStart = () => {
+    if (!name) {
+      setClimbResult({ error: "Please log in to play." });
+      return;
+    }
+    const parsedBet = parseGoatAmount(climbBetAmount);
+    if (!parsedBet || parsedBet <= 0) {
+      setClimbResult({ error: "Enter a valid bet amount (like 2,500,000 or 1b)." });
+      return;
+    }
+    const bet = Math.max(1, Math.floor(parsedBet));
+    if (bet > stats.goats) {
+      setClimbResult({ error: "Not enough 🐐 for that bet." });
+      return;
+    }
+    setClimbResult({});
+    setClimbStatus("running");
+    setClimbMultiplier(1);
+    const crashPoint = 1.2 + Math.random() * 3.8;
+    climbCrashPointRef.current = Number(crashPoint.toFixed(2));
+    if (climbTimerRef.current) {
+      clearInterval(climbTimerRef.current);
+    }
+    climbTimerRef.current = setInterval(() => {
+      setClimbMultiplier((prev) => {
+        const next = Number((prev + 0.04).toFixed(2));
+        if (next >= climbCrashPointRef.current) {
+          if (climbTimerRef.current) {
+            clearInterval(climbTimerRef.current);
+            climbTimerRef.current = null;
+          }
+          setClimbStatus("crashed");
+          void settleClimbRound(bet, climbCrashPointRef.current, false);
+        }
+        return next;
+      });
+    }, 180);
+  };
+
+  const handleClimbCashout = () => {
+    if (climbStatus !== "running") return;
+    const parsedBet = parseGoatAmount(climbBetAmount);
+    const bet = parsedBet ? Math.max(1, Math.floor(parsedBet)) : 0;
+    if (climbTimerRef.current) {
+      clearInterval(climbTimerRef.current);
+      climbTimerRef.current = null;
+    }
+    setClimbStatus("cashed");
+    void settleClimbRound(bet, climbMultiplier, true);
+  };
+
+  const settleHopRound = async (bet: number, multiplier: number, win: boolean) => {
+    try {
+      const res = await fetch("/api/goat-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "hop",
+          name,
+          betAmount: bet,
+          multiplier,
+          win,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setHopResult({ error: data?.error || "Failed to settle jumps." });
+        return;
+      }
+      syncStatsFromPayload(data);
+      setHopResult({
+        payout: data.payout,
+        win: data.win,
+        multiplier: data.multiplier,
+        betAmount: data.betAmount,
+        loss: data.loss,
+      });
+    } catch (err) {
+      console.error(err);
+      setHopResult({ error: "Something went wrong." });
+    }
+  };
+
+  const handleHopStart = () => {
+    if (!name) {
+      setHopResult({ error: "Please log in to play." });
+      return;
+    }
+    const parsedBet = parseGoatAmount(hopBetAmount);
+    if (!parsedBet || parsedBet <= 0) {
+      setHopResult({ error: "Enter a valid bet amount (like 2,500,000 or 1b)." });
+      return;
+    }
+    const bet = Math.max(1, Math.floor(parsedBet));
+    if (bet > stats.goats) {
+      setHopResult({ error: "Not enough 🐐 for that bet." });
+      return;
+    }
+    setHopResult({});
+    setHopStatus("running");
+    setHopMultiplier(1);
+    setHopJumps(0);
+  };
+
+  const handleHopJump = () => {
+    if (hopStatus !== "running") return;
+    const nextMultiplier = Number((hopMultiplier + 0.25).toFixed(2));
+    const nextJumps = hopJumps + 1;
+    setHopMultiplier(nextMultiplier);
+    setHopJumps(nextJumps);
+    const danger = Math.min(0.12 + nextJumps * 0.07, 0.72);
+    if (Math.random() < danger) {
+      setHopStatus("dead");
+      const parsedBet = parseGoatAmount(hopBetAmount);
+      const bet = parsedBet ? Math.max(1, Math.floor(parsedBet)) : 0;
+      void settleHopRound(bet, nextMultiplier, false);
+    }
+  };
+
+  const handleHopCashout = () => {
+    if (hopStatus !== "running") return;
+    const parsedBet = parseGoatAmount(hopBetAmount);
+    const bet = parsedBet ? Math.max(1, Math.floor(parsedBet)) : 0;
+    setHopStatus("cashed");
+    void settleHopRound(bet, hopMultiplier, true);
   };
 
   const displayDice: [number, number] = diceAnimating
@@ -872,9 +1085,13 @@ export default function GoatArcadePage() {
   const diceBetPreview = parseGoatAmount(diceBetAmount);
   const slotsBetPreview = parseGoatAmount(slotsBetAmount);
   const plinkoBetPreview = parseGoatAmount(plinkoBetAmount);
+  const climbBetPreview = parseGoatAmount(climbBetAmount);
+  const hopBetPreview = parseGoatAmount(hopBetAmount);
   const diceBetFallback = diceBetPreview ? formatBetInput(diceBetPreview) : "--";
   const slotsBetFallback = slotsBetPreview ? formatBetInput(slotsBetPreview) : "--";
   const plinkoBetFallback = plinkoBetPreview ? formatBetInput(plinkoBetPreview) : "--";
+  const climbBetFallback = climbBetPreview ? formatBetInput(climbBetPreview) : "--";
+  const hopBetFallback = hopBetPreview ? formatBetInput(hopBetPreview) : "--";
 
   const betOptions: { key: BetType; label: string }[] = [
     { key: "LOW", label: "LOW (2-6)" },
@@ -1158,181 +1375,361 @@ export default function GoatArcadePage() {
       );
     }
 
-    const activeBucket = PLINKO_BUCKETS.find((b) => b.label === plinkoResult.bucket);
-    const plinkoColumn = plinkoPath[plinkoStep] ?? Math.floor(PLINKO_BUCKETS.length / 2);
-    const plinkoOffset = plinkoOffsets[plinkoStep] ?? 0;
-    const plinkoTravel =
-      plinkoPath.length > 1 ? plinkoStep / Math.max(plinkoPath.length - 1, 1) : 0;
-    const plinkoWobble = plinkoDropping ? Math.sin(plinkoStep * 1.4) * 7 : 0;
-    const plinkoScale = plinkoDropping ? 1 + Math.sin(plinkoTravel * Math.PI) * 0.06 : 1;
-    return (
-      <div className="rounded-2xl bg-white shadow-lg p-4 sm:p-5 flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#3b4224]">Goat Plinko</h2>
-            <p className="text-sm text-[#556133]">Drop a glowing token through the farm pegs. Buckets range from 0x to 5x, with cozy odds favoring the middle.</p>
-          </div>
-          <div className="px-3 py-1 rounded-full bg-[#f2f6e6] text-xs font-semibold text-[#4f5d2a] shadow-inner">
-            Balance: 🐐 {stats.goats}
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-[#d9e5c2] bg-gradient-to-b from-[#f7fbf1] to-[#e7f1d7] p-4 shadow-inner plinko-board">
-          <div className="flex items-center justify-between text-sm text-[#3f4a23] font-semibold mb-3">
-            <span>Plinko board</span>
-            <span className="text-[#6b744d]">Tap Drop to send your token</span>
-          </div>
-          <div className="relative h-64 bg-white/70 rounded-xl overflow-hidden border border-[#d9e5c2] shadow-inner">
-            {PLINKO_SPARKLES.map((sparkle, idx) => (
-              <span
-                key={`sparkle-${idx}`}
-                className="absolute w-3 h-3 rounded-full plinko-sparkle"
-                style={{
-                  top: sparkle.top,
-                  left: sparkle.left,
-                  animationDelay: sparkle.delay,
-                }}
-              />
-            ))}
-            {Array.from({ length: PLINKO_BUCKETS.length + 1 }).map((_, rowIdx) => (
-              <div
-                key={`row-${rowIdx}`}
-                className="absolute left-0 right-0"
-                style={{ top: `${(rowIdx / (PLINKO_BUCKETS.length + 1)) * 70 + 10}%` }}
-              >
-                <div className="flex justify-center gap-4">
-                  {PLINKO_BUCKETS.map((bucket, colIdx) => (
-                    <span
-                      key={`${bucket.label}-${colIdx}-${rowIdx}`}
-                      className="w-3 h-3 rounded-full bg-[#c1d8a6] shadow plinko-peg"
-                      style={{ animationDelay: `${(rowIdx + colIdx) * 0.08}s` }}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            <div
-              className={`absolute w-9 h-9 rounded-full flex items-center justify-center text-2xl shadow-lg transition-all duration-200 ease-out plinko-token ${
-                plinkoDropping ? "bg-white" : "bg-[#f9fbf2]"
-              }`}
-              style={{
-                left: `${(((plinkoColumn + 0.5) / PLINKO_BUCKETS.length) * 100 + plinkoOffset).toFixed(2)}%`,
-                top: `${(plinkoTravel * 74 + 6).toFixed(2)}%`,
-                transform: `translate(-50%, -50%) rotate(${plinkoWobble}deg) scale(${plinkoScale})`,
-              }}
-            >
-              🐐
+    if (activeGame === "climb") {
+      return (
+        <div className="rounded-2xl bg-white shadow-lg p-4 sm:p-5 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[#3b4224]">Goat Climb</h2>
+              <p className="text-sm text-[#556133]">
+                Place a bet and watch the climb. Cash out before the climb stalls, or lose your bet if it stops first.
+              </p>
             </div>
-
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="relative w-full h-[88%]">
-                {Array.from({ length: Math.max(PLINKO_BUCKETS.length + 1, 6) }).map(
-                  (_, rowIdx) => {
-                    const cols = PLINKO_BUCKETS.length;
-                    return Array.from({ length: cols }).map((__, colIdx) => {
-                      const offset = rowIdx % 2 === 0 ? 0.5 : 0;
-                      const left = (((colIdx + offset) / cols) * 100).toFixed(2);
-                      const top = ((rowIdx / (PLINKO_BUCKETS.length + 1)) * 78 + 4).toFixed(2);
-                      return (
-                        <span
-                          key={`${rowIdx}-${colIdx}`}
-                          className="absolute w-2 h-2 rounded-full bg-[#cdd8b2] shadow-sm plinko-peg"
-                          style={{ left: `${left}%`, top: `${top}%`, animationDelay: `${rowIdx * 0.06}s` }}
-                        />
-                      );
-                    });
-                  }
-                )}
-              </div>
-            </div>
-
-            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
-              {PLINKO_BUCKETS.map((bucket) => (
-                <div
-                  key={bucket.label}
-                  className={`flex flex-col items-center px-3 py-2 rounded-lg border shadow-sm ${
-                    bucket.label === activeBucket?.label
-                      ? "bg-[#dcedc2] border-[#b7d08a]"
-                      : "bg-white/90 border-[#d9e5c2]"
-                  }`}
-                >
-                  <span className="text-lg">{bucket.label}</span>
-                  <span className="text-xs text-[#3f4a23] font-semibold">{bucket.multiplier}x</span>
-                </div>
-              ))}
+            <div className="px-3 py-1 rounded-full bg-[#f2f6e6] text-xs font-semibold text-[#4f5d2a] shadow-inner">
+              Balance: 🐐 {stats.goats}
             </div>
           </div>
-        </div>
 
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div className="flex flex-col gap-3">
-            <label className="text-sm font-semibold text-[#3f4a23]">Bet amount</label>
-            <BetAmountInput value={plinkoBetAmount} onChange={setPlinkoBetAmount} balance={stats.goats} />
-            <div className="text-xs text-[#6b744d]">Bet is deducted on drop. Winnings add back instantly.</div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <label className="text-sm font-semibold text-[#3f4a23]">Drop the token</label>
-            <button
-              onClick={handlePlinkoDrop}
-              disabled={plinkoDropping}
-              className="rounded-full bg-[#3f4a23] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#2f3618] disabled:opacity-60"
-            >
-              {plinkoDropping ? "Falling..." : "Drop now"}
-            </button>
-            {plinkoResult.error && (
-              <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {plinkoResult.error}
+          <div className="rounded-xl border border-[#d9e5c2] bg-gradient-to-r from-[#f7fbf1] to-[#edf7dd] p-4 shadow-inner">
+            <div className="flex items-center justify-between text-sm text-[#3f4a23] font-semibold mb-2">
+              <span>Altitude</span>
+              <span className="text-[#6b744d]">
+                {climbStatus === "running" ? "Climbing..." : climbStatus === "crashed" ? "Stalled" : "Ready"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-3xl font-bold text-[#3f4a23]">{climbMultiplier.toFixed(2)}x</div>
+              <div className="px-3 py-1 rounded-full bg-white/80 text-xs font-semibold text-[#4f5d2a] shadow-inner">
+                Status: {climbStatus}
               </div>
-            )}
+            </div>
           </div>
-        </div>
 
-        <div className="rounded-xl border border-[#d9e5c2] bg-[#f9fbf2] p-4 shadow-inner grid sm:grid-cols-3 gap-3 text-sm text-[#3f4a23]">
-          <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
-            <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Bet</span>
-            <span className="text-base font-semibold">🐐 {plinkoResult.betAmount ?? (plinkoDropping ? "..." : plinkoBetFallback)}</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
-            <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Bucket</span>
-            <span className="text-lg font-semibold">{plinkoResult.bucket || "--"}</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
-            <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Payout</span>
-            <span className={`text-2xl font-bold ${plinkoResult.win ? "text-[#3f7d2e]" : "text-[#a12f2f]"}`}>
-              {plinkoResult.win === undefined
-              ? "--"
-              : plinkoResult.win
-              ? `+🐐${plinkoResult.payout}`
-              : `-🐐${plinkoResult.betAmount ?? plinkoBetFallback}`}
-            </span>
-          </div>
-        </div>
-        {plinkoResult.capped && (
-          <div className="text-xs text-[#6b744d] bg-[#f4f8ea] border border-[#d9e5c2] rounded-lg px-3 py-2">
-            The barn ledger tops out near 🐐 {formatGoatScore(plinkoResult.cap ?? 0)}. Your win is safely capped so the stats stay stable.
-          </div>
-        )}
-
-        <div className="rounded-xl border border-[#d9e5c2] bg-[#f4f8ea] p-4 shadow-inner text-sm text-[#3f4a23]">
-          <div className="font-semibold text-[#2f3618] mb-3">How to play Goat Plinko</div>
           <div className="grid sm:grid-cols-2 gap-3">
-            {["Set a bet and drop the token to bounce through the pegs.", "Each bucket has its own multiplier from 0x up to 5x.", "Bet is taken on drop. Any winnings add back to your 🐐 balance right away.", "Enjoy the soft bounces and celebrate cozy wins!"]
-              .map((tip) => (
-                <div
-                  key={tip}
-                  className="flex items-start gap-2 rounded-lg bg-white/80 border border-[#e3ebd2] p-3 shadow-sm"
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-semibold text-[#3f4a23]">Bet amount</label>
+              <BetAmountInput value={climbBetAmount} onChange={setClimbBetAmount} balance={stats.goats} />
+              <div className="text-xs text-[#6b744d]">Your bet is at risk once the climb starts.</div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-semibold text-[#3f4a23]">Controls</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleClimbStart}
+                  disabled={climbStatus === "running"}
+                  className="rounded-full bg-[#3f4a23] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#2f3618] disabled:opacity-60"
                 >
-                  <span className="text-xl" aria-hidden>
-                    🐐
-                  </span>
-                  <span className="leading-snug">{tip}</span>
+                  Start climb
+                </button>
+                <button
+                  onClick={handleClimbCashout}
+                  disabled={climbStatus !== "running"}
+                  className="rounded-full bg-[#a2c867] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#8db153] disabled:opacity-60"
+                >
+                  Cash out
+                </button>
+              </div>
+              {climbResult.error && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {climbResult.error}
                 </div>
-              ))}
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#d9e5c2] bg-[#f9fbf2] p-4 shadow-inner grid sm:grid-cols-3 gap-3 text-sm text-[#3f4a23]">
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Bet</span>
+              <span className="text-base font-semibold">🐐 {climbResult.betAmount ?? climbBetFallback}</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Multiplier</span>
+              <span className="text-2xl font-bold">{climbResult.multiplier ? `${climbResult.multiplier}x` : "--"}</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Payout</span>
+              <span className={`text-2xl font-bold ${climbResult.win ? "text-[#3f7d2e]" : "text-[#a12f2f]"}`}>
+                {climbResult.win === undefined
+                  ? "--"
+                  : climbResult.win
+                  ? `+🐐${climbResult.payout}`
+                  : `-🐐${climbResult.betAmount ?? climbBetFallback}`}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-    );
+      );
+    }
+
+    if (activeGame === "hop") {
+      return (
+        <div className="rounded-2xl bg-white shadow-lg p-4 sm:p-5 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[#3b4224]">Goat Hop</h2>
+              <p className="text-sm text-[#556133]">
+                Jump lane by lane to raise your multiplier. Cash out whenever you want, but a miss costs up to your current multiplier.
+              </p>
+            </div>
+            <div className="px-3 py-1 rounded-full bg-[#f2f6e6] text-xs font-semibold text-[#4f5d2a] shadow-inner">
+              Balance: 🐐 {stats.goats}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#d9e5c2] bg-gradient-to-r from-[#f7fbf1] to-[#edf7dd] p-4 shadow-inner">
+            <div className="flex items-center justify-between text-sm text-[#3f4a23] font-semibold mb-2">
+              <span>Jump lane</span>
+              <span className="text-[#6b744d]">Jumps: {hopJumps}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-3xl font-bold text-[#3f4a23]">{hopMultiplier.toFixed(2)}x</div>
+              <div className="px-3 py-1 rounded-full bg-white/80 text-xs font-semibold text-[#4f5d2a] shadow-inner">
+                Status: {hopStatus}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-semibold text-[#3f4a23]">Bet amount</label>
+              <BetAmountInput value={hopBetAmount} onChange={setHopBetAmount} balance={stats.goats} />
+              <div className="text-xs text-[#6b744d]">A miss costs your bet times the current multiplier.</div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-semibold text-[#3f4a23]">Controls</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleHopStart}
+                  disabled={hopStatus === "running"}
+                  className="rounded-full bg-[#3f4a23] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#2f3618] disabled:opacity-60"
+                >
+                  Start run
+                </button>
+                <button
+                  onClick={handleHopJump}
+                  disabled={hopStatus !== "running"}
+                  className="rounded-full bg-[#a2c867] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#8db153] disabled:opacity-60"
+                >
+                  Jump
+                </button>
+                <button
+                  onClick={handleHopCashout}
+                  disabled={hopStatus !== "running"}
+                  className="rounded-full bg-[#7a9950] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#678545] disabled:opacity-60"
+                >
+                  Cash out
+                </button>
+              </div>
+              {hopResult.error && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {hopResult.error}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#d9e5c2] bg-[#f9fbf2] p-4 shadow-inner grid sm:grid-cols-3 gap-3 text-sm text-[#3f4a23]">
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Bet</span>
+              <span className="text-base font-semibold">🐐 {hopResult.betAmount ?? hopBetFallback}</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Multiplier</span>
+              <span className="text-2xl font-bold">{hopResult.multiplier ? `${hopResult.multiplier}x` : "--"}</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Outcome</span>
+              <span className={`text-2xl font-bold ${hopResult.win ? "text-[#3f7d2e]" : "text-[#a12f2f]"}`}>
+                {hopResult.win === undefined
+                  ? "--"
+                  : hopResult.win
+                  ? `+🐐${hopResult.payout}`
+                  : `-🐐${hopResult.loss ?? hopResult.betAmount ?? hopBetFallback}`}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeGame === "plinko") {
+      const activeBucket = PLINKO_BUCKETS.find((b) => b.label === plinkoResult.bucket);
+      const plinkoColumn = plinkoPath[plinkoStep] ?? Math.floor(PLINKO_BUCKETS.length / 2);
+      const plinkoOffset = plinkoOffsets[plinkoStep] ?? 0;
+      const plinkoTravel =
+        plinkoPath.length > 1 ? plinkoStep / Math.max(plinkoPath.length - 1, 1) : 0;
+      const plinkoWobble = plinkoDropping ? Math.sin(plinkoStep * 1.4) * 7 : 0;
+      const plinkoScale = plinkoDropping ? 1 + Math.sin(plinkoTravel * Math.PI) * 0.06 : 1;
+      return (
+        <div className="rounded-2xl bg-white shadow-lg p-4 sm:p-5 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[#3b4224]">Goat Plinko</h2>
+              <p className="text-sm text-[#556133]">Drop a glowing token through the farm pegs. Buckets range from 0x to 5x, with cozy odds favoring the middle.</p>
+            </div>
+            <div className="px-3 py-1 rounded-full bg-[#f2f6e6] text-xs font-semibold text-[#4f5d2a] shadow-inner">
+              Balance: 🐐 {stats.goats}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#d9e5c2] bg-gradient-to-b from-[#f7fbf1] to-[#e7f1d7] p-4 shadow-inner plinko-board">
+            <div className="flex items-center justify-between text-sm text-[#3f4a23] font-semibold mb-3">
+              <span>Plinko board</span>
+              <span className="text-[#6b744d]">Tap Drop to send your token</span>
+            </div>
+            <div className="relative h-64 bg-white/70 rounded-xl overflow-hidden border border-[#d9e5c2] shadow-inner">
+              {PLINKO_SPARKLES.map((sparkle, idx) => (
+                <span
+                  key={`sparkle-${idx}`}
+                  className="absolute w-3 h-3 rounded-full plinko-sparkle"
+                  style={{
+                    top: sparkle.top,
+                    left: sparkle.left,
+                    animationDelay: sparkle.delay,
+                  }}
+                />
+              ))}
+              {Array.from({ length: PLINKO_BUCKETS.length + 1 }).map((_, rowIdx) => (
+                <div
+                  key={`row-${rowIdx}`}
+                  className="absolute left-0 right-0"
+                  style={{ top: `${(rowIdx / (PLINKO_BUCKETS.length + 1)) * 70 + 10}%` }}
+                >
+                  <div className="flex justify-center gap-4">
+                    {PLINKO_BUCKETS.map((bucket, colIdx) => (
+                      <span
+                        key={`${bucket.label}-${colIdx}-${rowIdx}`}
+                        className="w-3 h-3 rounded-full bg-[#c1d8a6] shadow plinko-peg"
+                        style={{ animationDelay: `${(rowIdx + colIdx) * 0.08}s` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div
+                className={`absolute w-9 h-9 rounded-full flex items-center justify-center text-2xl shadow-lg transition-all duration-200 ease-out plinko-token ${
+                  plinkoDropping ? "bg-white" : "bg-[#f9fbf2]"
+                }`}
+                style={{
+                  left: `${(((plinkoColumn + 0.5) / PLINKO_BUCKETS.length) * 100 + plinkoOffset).toFixed(2)}%`,
+                  top: `${(plinkoTravel * 74 + 6).toFixed(2)}%`,
+                  transform: `translate(-50%, -50%) rotate(${plinkoWobble}deg) scale(${plinkoScale})`,
+                }}
+              >
+                🐐
+              </div>
+
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div className="relative w-full h-[88%]">
+                  {Array.from({ length: Math.max(PLINKO_BUCKETS.length + 1, 6) }).map(
+                    (_, rowIdx) => {
+                      const cols = PLINKO_BUCKETS.length;
+                      return Array.from({ length: cols }).map((__, colIdx) => {
+                        const offset = rowIdx % 2 === 0 ? 0.5 : 0;
+                        const left = (((colIdx + offset) / cols) * 100).toFixed(2);
+                        const top = ((rowIdx / (PLINKO_BUCKETS.length + 1)) * 78 + 4).toFixed(2);
+                        return (
+                          <span
+                            key={`${rowIdx}-${colIdx}`}
+                            className="absolute w-2 h-2 rounded-full bg-[#cdd8b2] shadow-sm plinko-peg"
+                            style={{ left: `${left}%`, top: `${top}%`, animationDelay: `${rowIdx * 0.06}s` }}
+                          />
+                        );
+                      });
+                    }
+                  )}
+                </div>
+              </div>
+
+              <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
+                {PLINKO_BUCKETS.map((bucket) => (
+                  <div
+                    key={bucket.label}
+                    className={`flex flex-col items-center px-3 py-2 rounded-lg border shadow-sm ${
+                      bucket.label === activeBucket?.label
+                        ? "bg-[#dcedc2] border-[#b7d08a]"
+                        : "bg-white/90 border-[#d9e5c2]"
+                    }`}
+                  >
+                    <span className="text-lg">{bucket.label}</span>
+                    <span className="text-xs text-[#3f4a23] font-semibold">{bucket.multiplier}x</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-semibold text-[#3f4a23]">Bet amount</label>
+              <BetAmountInput value={plinkoBetAmount} onChange={setPlinkoBetAmount} balance={stats.goats} />
+              <div className="text-xs text-[#6b744d]">Bet is deducted on drop. Winnings add back instantly.</div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-semibold text-[#3f4a23]">Drop the token</label>
+              <button
+                onClick={handlePlinkoDrop}
+                className="rounded-full bg-[#3f4a23] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#2f3618]"
+              >
+                {plinkoDropping ? "Drop again" : "Drop now"}
+              </button>
+              {plinkoResult.error && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {plinkoResult.error}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#d9e5c2] bg-[#f9fbf2] p-4 shadow-inner grid sm:grid-cols-3 gap-3 text-sm text-[#3f4a23]">
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Bet</span>
+              <span className="text-base font-semibold">🐐 {plinkoResult.betAmount ?? (plinkoDropping ? "..." : plinkoBetFallback)}</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Bucket</span>
+              <span className="text-lg font-semibold">{plinkoResult.bucket || "--"}</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 bg-white/90 rounded-lg p-3 shadow">
+              <span className="text-xs uppercase tracking-[0.12em] text-[#6b744d]">Payout</span>
+              <span className={`text-2xl font-bold ${plinkoResult.win ? "text-[#3f7d2e]" : "text-[#a12f2f]"}`}>
+                {plinkoResult.win === undefined
+                ? "--"
+                : plinkoResult.win
+                ? `+🐐${plinkoResult.payout}`
+                : `-🐐${plinkoResult.betAmount ?? plinkoBetFallback}`}
+              </span>
+            </div>
+          </div>
+          {plinkoResult.capped && (
+            <div className="text-xs text-[#6b744d] bg-[#f4f8ea] border border-[#d9e5c2] rounded-lg px-3 py-2">
+              The barn ledger tops out near 🐐 {formatGoatScore(plinkoResult.cap ?? 0)}. Your win is safely capped so the stats stay stable.
+            </div>
+          )}
+
+          <div className="rounded-xl border border-[#d9e5c2] bg-[#f4f8ea] p-4 shadow-inner text-sm text-[#3f4a23]">
+            <div className="font-semibold text-[#2f3618] mb-3">How to play Goat Plinko</div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {["Set a bet and drop the token to bounce through the pegs.", "Each bucket has its own multiplier from 0x up to 5x.", "Bet is taken on drop. Any winnings add back to your 🐐 balance right away.", "Enjoy the soft bounces and celebrate cozy wins!"]
+                .map((tip) => (
+                  <div
+                    key={tip}
+                    className="flex items-start gap-2 rounded-lg bg-white/80 border border-[#e3ebd2] p-3 shadow-sm"
+                  >
+                    <span className="text-xl" aria-hidden>
+                      🐐
+                    </span>
+                    <span className="leading-snug">{tip}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -1364,6 +1761,8 @@ export default function GoatArcadePage() {
             { key: "dice", label: "Goat Dice" },
             { key: "slots", label: "Farm Slots" },
             { key: "plinko", label: "Goat Plinko" },
+            { key: "climb", label: "Goat Climb" },
+            { key: "hop", label: "Goat Hop" },
           ] as const
         ).map((tab) => (
           <button
