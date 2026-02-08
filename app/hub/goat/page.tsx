@@ -351,6 +351,7 @@ export default function GoatArcadePage() {
   const [hopStatus, setHopStatus] = useState<"idle" | "running" | "dead" | "cashed">("idle");
   const [hopMultiplier, setHopMultiplier] = useState(1);
   const [hopJumps, setHopJumps] = useState(0);
+  const [hopJumpPulse, setHopJumpPulse] = useState(false);
 
   useEffect(() => {
     const session = loadSession();
@@ -1054,6 +1055,8 @@ export default function GoatArcadePage() {
     const nextJumps = hopJumps + 1;
     setHopMultiplier(nextMultiplier);
     setHopJumps(nextJumps);
+    setHopJumpPulse(true);
+    setTimeout(() => setHopJumpPulse(false), 260);
     const danger = Math.min(0.12 + nextJumps * 0.07, 0.72);
     if (Math.random() < danger) {
       setHopStatus("dead");
@@ -1403,6 +1406,22 @@ export default function GoatArcadePage() {
                 Status: {climbStatus}
               </div>
             </div>
+            <div className="mt-4 h-28 rounded-lg border border-[#d9e5c2] bg-white/80 p-3 relative overflow-hidden">
+              <div className="absolute inset-0 flex items-end justify-start gap-2 px-3 pb-3">
+                <span className="text-xs text-[#6b744d]">1x</span>
+                <span className="ml-auto text-xs text-[#6b744d]">5x</span>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div
+                  className={`climb-graph-line ${climbStatus === "running" ? "climb-graph-line-active" : ""}`}
+                  style={{ ["--climb-progress" as string]: `${Math.min(climbMultiplier / 5, 1) * 100}%` }}
+                />
+              </div>
+              <div className="absolute bottom-4 left-4 text-lg">🚀</div>
+              <div className="absolute top-3 right-3 text-sm text-[#4f5d2a] font-semibold">
+                {climbStatus === "crashed" ? "Stopped" : "Rising"}
+              </div>
+            </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
@@ -1486,6 +1505,24 @@ export default function GoatArcadePage() {
               <div className="px-3 py-1 rounded-full bg-white/80 text-xs font-semibold text-[#4f5d2a] shadow-inner">
                 Status: {hopStatus}
               </div>
+            </div>
+            <div className="mt-4 rounded-lg border border-[#d9e5c2] bg-[#2f3b2a] p-3 relative overflow-hidden hop-road">
+              <div className="absolute inset-0 flex flex-col justify-between py-2">
+                <div className="h-8 border-b border-dashed border-[#cfe4b3]/40" />
+                <div className="h-8 border-b border-dashed border-[#cfe4b3]/40" />
+                <div className="h-8" />
+              </div>
+              <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                <span className={`text-2xl hop-goat ${hopJumpPulse ? "hop-goat-jump" : ""}`}>🐐</span>
+              </div>
+              {["hop-car", "hop-car hop-car-alt", "hop-car hop-car-slow"].map((cls, idx) => (
+                <span
+                  key={`car-${idx}`}
+                  className={`${cls} ${hopStatus === "running" ? "hop-car-active" : ""}`}
+                >
+                  🚗
+                </span>
+              ))}
             </div>
           </div>
 
@@ -1890,6 +1927,24 @@ export default function GoatArcadePage() {
           100% { transform: scale(0.2); opacity: 0; }
         }
 
+        @keyframes climb-line {
+          0% { transform: translateX(-60%); opacity: 0.4; }
+          100% { transform: translateX(60%); opacity: 1; }
+        }
+
+        @keyframes hop-car {
+          0% { transform: translateX(120%); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translateX(-140%); opacity: 0; }
+        }
+
+        @keyframes hop-goat {
+          0% { transform: translateY(0); }
+          40% { transform: translateY(-10px); }
+          100% { transform: translateY(0); }
+        }
+
         .plinko-token {
           animation: plinko-glow 1.4s ease-in-out infinite;
           will-change: transform, left, top;
@@ -1922,6 +1977,66 @@ export default function GoatArcadePage() {
           animation: plinko-sparkle 3.2s ease-in-out infinite;
           filter: blur(0.2px);
           opacity: 0;
+        }
+
+        .climb-graph-line {
+          width: var(--climb-progress, 20%);
+          height: 4px;
+          background: linear-gradient(90deg, rgba(162, 200, 103, 0.4), rgba(91, 140, 44, 0.9));
+          border-radius: 999px;
+          position: relative;
+        }
+
+        .climb-graph-line::after {
+          content: "";
+          position: absolute;
+          right: 0;
+          top: -6px;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #7da84a;
+          box-shadow: 0 0 10px rgba(125, 168, 74, 0.6);
+        }
+
+        .climb-graph-line-active {
+          animation: climb-line 1.6s ease-in-out infinite alternate;
+        }
+
+        .hop-road {
+          height: 120px;
+        }
+
+        .hop-goat {
+          display: inline-flex;
+        }
+
+        .hop-goat-jump {
+          animation: hop-goat 0.25s ease-out;
+        }
+
+        .hop-car {
+          position: absolute;
+          right: -30%;
+          top: 12px;
+          font-size: 1.5rem;
+          opacity: 0;
+        }
+
+        .hop-car-alt {
+          top: 46px;
+          font-size: 1.4rem;
+          animation-delay: 0.5s;
+        }
+
+        .hop-car-slow {
+          top: 78px;
+          font-size: 1.3rem;
+          animation-delay: 0.9s;
+        }
+
+        .hop-car-active {
+          animation: hop-car 2.8s linear infinite;
         }
       `}</style>
     </div>
