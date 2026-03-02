@@ -861,7 +861,8 @@ export function CustomTablesEditor({
           const columnHeaderType = table.columnHeaderType;
           const cellType = table.cellType;
           const normalizedUserName = currentUserName?.toLowerCase() || "";
-          const hasPublishedSnapshot = Boolean(publishedTablesById[table.id]);
+          const publishedTable = publishedTablesById[table.id];
+          const hasPublishedSnapshot = Boolean(publishedTable);
           const hasDraftChanges = Boolean(customTablesDirty[table.id]);
           const hasLocalDraftBadge = hasDraftChanges || (!hasPublishedSnapshot && table.cells.some((row) => row.some((cell) => cell.trim().length > 0)));
           return (
@@ -1343,11 +1344,21 @@ export function CustomTablesEditor({
                                 cellMatchesUser ? "bg-[#eaf1da]" : ""
                               } ${selectedRange?.tableId === table.id && rowIdx >= Math.min(selectedRange.startRowIdx, selectedRange.endRowIdx) && rowIdx <= Math.max(selectedRange.startRowIdx, selectedRange.endRowIdx) && colIdx >= Math.min(selectedRange.startColIdx, selectedRange.endColIdx) && colIdx <= Math.max(selectedRange.startColIdx, selectedRange.endColIdx) ? "ring-2 ring-[#8fae4c] ring-inset" : ""}`}
                             >
-                              {hasPublishedSnapshot && hasDraftChanges && (
-                                <span className="mb-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.1em] text-amber-700">
-                                  Draft
-                                </span>
-                              )}
+                              {(() => {
+                                if (!hasDraftChanges) return null;
+                                const publishedValue = String(
+                                  publishedTable?.cells?.[rowIdx]?.[colIdx] ?? ""
+                                );
+                                const cellChanged = hasPublishedSnapshot
+                                  ? cellValue !== publishedValue
+                                  : cellValue.trim().length > 0;
+                                if (!cellChanged) return null;
+                                return (
+                                  <span className="mb-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.1em] text-amber-700">
+                                    Draft
+                                  </span>
+                                );
+                              })()}
                               {canEditCustomTables ? (
                                 cellType === "user" ? (
                                   <MultiSelectChecklist
