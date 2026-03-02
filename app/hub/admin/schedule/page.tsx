@@ -2144,9 +2144,9 @@ export default function AdminScheduleEditorPage() {
     const changes: UndoChange[] = [];
     const nextCells = scheduleData.cells.map((row, rowIdx) =>
       row.map((cell, colIdx) => {
-        const hasContent = cell.tasks.length > 0 || Boolean(cell.note);
+        const hasContent = cell.tasks.length > 0 || Boolean(cell.note) || Boolean(cell.blocked);
         if (!hasContent) return cell;
-        const nextContent: CellContent = { ...cell, tasks: [], note: "" };
+        const nextContent: CellContent = { ...cell, tasks: [], note: "", blocked: false };
         changes.push({
           person: scheduleData.people[rowIdx],
           slotId: scheduleData.slots[colIdx].id,
@@ -4285,6 +4285,43 @@ export default function AdminScheduleEditorPage() {
           targetRecurringBySeries.set(seriesId, task.id);
         }
       });
+      const sourceSeriesMeta = new Map<string, { recurrenceUntil: string }>();
+      sourceRecurringTasks.forEach((task: any) => {
+        const seriesId = String(task.parent_task_id || task.id);
+        const recurrenceUntil = String(task.recurrence_until || "");
+        if (!sourceSeriesMeta.has(seriesId)) {
+          sourceSeriesMeta.set(seriesId, { recurrenceUntil });
+        }
+      });
+      for (const [seriesId, meta] of sourceSeriesMeta.entries()) {
+        if (targetRecurringBySeries.has(seriesId)) continue;
+        if (meta.recurrenceUntil && meta.recurrenceUntil < targetIso) {
+          const extendRes = await fetch("/api/tasks", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: seriesId,
+              recurrence_until: targetIso,
+              applyTo: "all",
+            }),
+          });
+          if (!extendRes.ok) {
+            const json = await extendRes.json().catch(() => ({}));
+            throw new Error(json.error || "Failed to extend recurring task until date.");
+          }
+        }
+
+        const occurrenceRes = await fetch("/api/tasks/occurrence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seriesId, occurrenceDate: targetIso }),
+        });
+        const occurrenceJson = await occurrenceRes.json().catch(() => ({}));
+        if (!occurrenceRes.ok || !occurrenceJson.task?.id) {
+          throw new Error(occurrenceJson.error || "Failed to ensure recurring task occurrence.");
+        }
+        targetRecurringBySeries.set(seriesId, String(occurrenceJson.task.id));
+      }
       const sourceOneOffById = new Map<string, any>();
       if (suggestModeEnabled) {
         const sourceOneOffRes = await fetch(
@@ -6018,12 +6055,6 @@ export default function AdminScheduleEditorPage() {
 
                             {/* Assignment counter and completion indicator */}
                             <div className="flex shrink-0 items-center gap-1">
-                              {scheduleMode === "page" && hasUnpublishedChanges && (
-                                <span
-                                  className="h-2 w-2 rounded-full bg-red-500"
-                                  aria-label="Unpublished changes"
-                                />
-                              )}
                               <span className="rounded-full bg-white/80 px-1.5 py-[1px] text-[9px] font-semibold text-[#2f3b21]">
                                 {assignedCount}/{neededCount}
                               </span>
