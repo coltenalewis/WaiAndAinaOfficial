@@ -100,7 +100,6 @@ type IndicatorRuleType =
   | "missing_description"
   | "status"
   | "priority"
-  | "missing_person_count"
   | "task_type"
   | "has_comments";
 type IndicatorRule = {
@@ -239,31 +238,6 @@ function countCommentsForDate(comments: unknown, targetIso: string) {
   }, 0);
 }
 
-
-function normalizeCustomKeybind(value: string, fallback: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return fallback;
-  return trimmed.replace(/\s+/g, "").toUpperCase();
-}
-
-function matchesCustomKeybind(event: KeyboardEvent, keybind: string) {
-  const normalized = keybind.toUpperCase();
-  const usesCtrl = normalized.includes("CTRL");
-  const usesCmd = normalized.includes("CMD") || normalized.includes("META");
-  const usesShift = normalized.includes("SHIFT");
-  const usesAlt = normalized.includes("ALT") || normalized.includes("OPTION");
-  const matchKey = normalized.split("+").pop()?.toLowerCase() || "";
-  const hasPrimary = usesCtrl || usesCmd;
-  const primaryPressed = usesCtrl
-    ? event.ctrlKey
-    : usesCmd
-      ? event.metaKey
-      : event.ctrlKey || event.metaKey;
-  if (hasPrimary && !primaryPressed) return false;
-  if (usesShift !== event.shiftKey) return false;
-  if (usesAlt !== event.altKey) return false;
-  return Boolean(matchKey) && event.key.toLowerCase() === matchKey;
-}
 
 function parseEstimatedHours(value?: string | null) {
   if (!value) return DEFAULT_SHIFT_HOURS;
@@ -463,8 +437,6 @@ export default function AdminScheduleEditorPage() {
   const [dayOverviewCommentsByTask, setDayOverviewCommentsByTask] = useState<Record<string, TaskCommentPreview[]>>({});
   const [dayOverviewCommentsLoading, setDayOverviewCommentsLoading] = useState<Set<string>>(new Set());
   const [yesterdayOverviewVisible, setYesterdayOverviewVisible] = useState(true);
-  const [canvasCopyKeybind, setCanvasCopyKeybind] = useState("Ctrl/Cmd+C");
-  const [canvasPasteKeybind, setCanvasPasteKeybind] = useState("Ctrl/Cmd+V");
   const taskEditLastSavedSignatureRef = useRef<string>("");
   const taskEditAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingTaskKey, setEditingTaskKey] = useState<string | null>(null);
@@ -817,24 +789,6 @@ export default function AdminScheduleEditorPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const key = `custom-table-keybinds-${(currentUserName || "guest").toLowerCase()}`;
-      const cached = localStorage.getItem(key);
-      if (!cached) return;
-      const parsed = JSON.parse(cached) as { copy?: string; paste?: string };
-      setCanvasCopyKeybind(
-        normalizeCustomKeybind(parsed.copy || "Ctrl/Cmd+C", "Ctrl/Cmd+C")
-      );
-      setCanvasPasteKeybind(
-        normalizeCustomKeybind(parsed.paste || "Ctrl/Cmd+V", "Ctrl/Cmd+V")
-      );
-    } catch (err) {
-      console.warn("Failed to parse shared keybind cache", err);
-    }
-  }, [currentUserName]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
     localStorage.setItem(YESTERDAY_OVERVIEW_VISIBILITY_KEY, String(yesterdayOverviewVisible));
   }, [yesterdayOverviewVisible]);
 
@@ -1065,7 +1019,7 @@ export default function AdminScheduleEditorPage() {
     try {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        const normalized = parsed.filter((rule) => rule && typeof rule === "object");
+        const normalized = parsed.filter((rule) => rule && typeof rule === "object" && rule.type !== "missing_person_count");
         if (normalized.length) {
           setIndicatorRules(normalized as IndicatorRule[]);
         }
@@ -1462,8 +1416,6 @@ export default function AdminScheduleEditorPage() {
     switch (rule.type) {
       case "missing_description":
         return !task.description?.trim();
-      case "missing_person_count":
-        return !task.personCount || task.personCount <= 0;
       case "status":
         return Boolean(rule.value) && task.status?.toLowerCase() === rule.value?.toLowerCase();
       case "priority":
@@ -3189,16 +3141,6 @@ export default function AdminScheduleEditorPage() {
           return;
         }
       }
-      if (selectedCell && matchesCustomKeybind(event, canvasCopyKeybind)) {
-        handleCopyCell();
-        event.preventDefault();
-        return;
-      }
-      if (selectedCell && matchesCustomKeybind(event, canvasPasteKeybind)) {
-        handlePasteCell();
-        event.preventDefault();
-        return;
-      }
       const isMac =
         typeof navigator !== "undefined" &&
         /Mac|iPod|iPhone|iPad/.test(navigator.platform);
@@ -3232,8 +3174,6 @@ export default function AdminScheduleEditorPage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    canvasCopyKeybind,
-    canvasPasteKeybind,
     cellClipboard,
     handleCopyCell,
     handlePasteCell,
@@ -5265,7 +5205,6 @@ export default function AdminScheduleEditorPage() {
                                 className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-xs"
                               >
                                 <option value="missing_description">Missing description</option>
-                                <option value="missing_person_count">Missing person count</option>
                                 <option value="status">Status equals</option>
                                 <option value="priority">Priority equals</option>
                                 <option value="task_type">Task type equals</option>
@@ -5656,7 +5595,7 @@ export default function AdminScheduleEditorPage() {
               <li>Shift + click to select a range of cells.</li>
               <li>Double-click a task to rename it inline.</li>
               <li>Press Esc to cancel inline editing.</li>
-              <li>Copy/Paste keybinds mirror Custom Tables settings (site-wide for canvas + custom tables).</li>
+              <li>Copy/Paste uses standard shortcuts across the site: Ctrl+C / Ctrl+V (Windows) and Cmd+C / Cmd+V (Mac).</li>
             </ul>
           </details>
 
@@ -5899,8 +5838,6 @@ export default function AdminScheduleEditorPage() {
                         taskPeopleCountById.byName.get(task.name.trim().toLowerCase()) ??
                         0;
                       const neededCount = meta?.personCount ?? 0;
-                      const hasEnoughPeople =
-                        neededCount > 0 ? assignedCount >= neededCount : false;
                       const taskStatus = meta?.status || "Not Started";
                       const taskType = meta?.type || "Uncategorized";
                       const commentCount = meta?.commentCount ?? 0;
@@ -6090,11 +6027,6 @@ export default function AdminScheduleEditorPage() {
                               <span className="rounded-full bg-white/80 px-1.5 py-[1px] text-[9px] font-semibold text-[#2f3b21]">
                                 {assignedCount}/{neededCount}
                               </span>
-                              {hasEnoughPeople && (
-                                <span className="text-[11px] text-emerald-600 shrink-0" title="Enough people assigned">
-                                  ✅
-                                </span>
-                              )}
                             </div>
 
                           </div>
@@ -6947,9 +6879,6 @@ export default function AdminScheduleEditorPage() {
                                 {task.priority ? ` • ${task.priority}` : ""}
                               </div>
                             </div>
-                            {taskHandled.hasEnoughPeople && (
-                              <span className="text-2xl text-emerald-600">✅</span>
-                            )}
                           </button>
                         );
                       })}
@@ -7096,9 +7025,6 @@ export default function AdminScheduleEditorPage() {
                                 {task.priority ? ` • ${task.priority}` : ""}
                               </div>
                             </div>
-                            {taskHandled.hasEnoughPeople && (
-                              <span className="text-2xl text-emerald-600">✅</span>
-                            )}
                           </button>
                         );
                       })}
@@ -7451,9 +7377,6 @@ export default function AdminScheduleEditorPage() {
                           {task.priority ? ` • ${task.priority}` : ""}
                         </div>
                       </div>
-                      {taskHandled.hasEnoughPeople && (
-                        <span className="text-2xl text-emerald-600">✅</span>
-                      )}
                     </button>
                   );
                 }
