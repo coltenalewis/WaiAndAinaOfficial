@@ -264,6 +264,22 @@ function getSelectionBounds(selection: CellSelection) {
     maxCol: Math.max(selection.startColIdx, selection.endColIdx),
   };
 }
+
+function isStandardCopyPaste(event: KeyboardEvent, action: "copy" | "paste") {
+  if (event.altKey) return false;
+  if (!event.ctrlKey && !event.metaKey) return false;
+  const expectedKey = action === "copy" ? "c" : "v";
+  return event.key.toLowerCase() === expectedKey;
+}
+
+function getSelectionBounds(selection: CellSelection) {
+  return {
+    minRow: Math.min(selection.startRowIdx, selection.endRowIdx),
+    maxRow: Math.max(selection.startRowIdx, selection.endRowIdx),
+    minCol: Math.min(selection.startColIdx, selection.endColIdx),
+    maxCol: Math.max(selection.startColIdx, selection.endColIdx),
+  };
+}
 export function CustomTablesEditor({
   dateLabel,
   canEdit,
