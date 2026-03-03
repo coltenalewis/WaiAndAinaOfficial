@@ -92,6 +92,75 @@ const TYPE_COLORS: Record<string, string> = {
   emerald: "border-l-[#5dbf9b] bg-[#eafaf3]",
 };
 
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function parseIsoDateUtc(iso: string) {
+  const [year, month, day] = iso.split("-").map((value) => Number(value));
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addDaysIso(iso: string, days: number) {
+  const date = parseIsoDateUtc(iso);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfWeekIso(iso: string) {
+  const date = parseIsoDateUtc(iso);
+  const weekday = date.getUTCDay();
+  date.setUTCDate(date.getUTCDate() - weekday);
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfMonthGridIso(iso: string) {
+  const date = parseIsoDateUtc(iso);
+  date.setUTCDate(1);
+  const monthStart = date.toISOString().slice(0, 10);
+  return startOfWeekIso(monthStart);
+}
+
+function isoDayDiff(startIso: string, endIso: string) {
+  const start = parseIsoDateUtc(startIso);
+  const end = parseIsoDateUtc(endIso);
+  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function occursOnDate(task: TaskItem, targetIso: string) {
+  const origin = task.origin_date || task.occurrence_date;
+  if (!origin) return false;
+  if (targetIso < origin) return false;
+  if (task.recurrence_until && targetIso > task.recurrence_until) return false;
+
+  const interval = Math.max(1, Number(task.recurrence_interval || 1));
+  const unit = task.recurrence_unit || "day";
+  const originDate = parseIsoDateUtc(origin);
+  const targetDate = parseIsoDateUtc(targetIso);
+
+  if (unit === "day") {
+    const diffDays = isoDayDiff(origin, targetIso);
+    return diffDays % interval === 0;
+  }
+
+  if (unit === "month") {
+    const monthDiff =
+      (targetDate.getUTCFullYear() - originDate.getUTCFullYear()) * 12 +
+      (targetDate.getUTCMonth() - originDate.getUTCMonth());
+    if (monthDiff < 0 || monthDiff % interval !== 0) return false;
+    return targetDate.getUTCDate() === originDate.getUTCDate();
+  }
+
+  if (unit === "year") {
+    const yearDiff = targetDate.getUTCFullYear() - originDate.getUTCFullYear();
+    if (yearDiff < 0 || yearDiff % interval !== 0) return false;
+    return (
+      targetDate.getUTCMonth() === originDate.getUTCMonth() &&
+      targetDate.getUTCDate() === originDate.getUTCDate()
+    );
+  }
+
+  return false;
+}
+
 function renderTextWithAnimalLinks(text?: string | null): ReactNode {
   if (!text) return "No description provided.";
   const regex = /\[animal:([^\]]+)\]/gi;
@@ -142,6 +211,7 @@ export default function TaskEditorPage() {
   const [recurringEditDate, setRecurringEditDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
+  const [recurrenceCalendarView, setRecurrenceCalendarView] = useState<"month" | "week">("month");
 
   const [filters, setFilters] = useState({
     search: "",
@@ -722,6 +792,24 @@ export default function TaskEditorPage() {
         .sort(sortTasks),
     [filteredTasks, sortTasks]
   );
+
+  const recurrenceCalendarDays = useMemo(() => {
+    const anchor = recurringEditDate || new Date().toISOString().slice(0, 10);
+    if (recurrenceCalendarView === "week") {
+      const start = startOfWeekIso(anchor);
+      return Array.from({ length: 7 }, (_, idx) => addDaysIso(start, idx));
+    }
+    const start = startOfMonthGridIso(anchor);
+    return Array.from({ length: 42 }, (_, idx) => addDaysIso(start, idx));
+  }, [recurrenceCalendarView, recurringEditDate]);
+
+  const recurringTasksByDate = useMemo(() => {
+    const map: Record<string, TaskItem[]> = {};
+    recurrenceCalendarDays.forEach((dateIso) => {
+      map[dateIso] = recurringTasks.filter((task) => occursOnDate(task, dateIso));
+    });
+    return map;
+  }, [recurrenceCalendarDays, recurringTasks]);
   const oneOffTasks = useMemo(
     () => filteredTasks.filter((task) => !task.recurring).sort(sortTasks),
     [filteredTasks, sortTasks]
@@ -885,6 +973,75 @@ export default function TaskEditorPage() {
                         onChange={(e) => setRecurringEditDate(e.target.value)}
                         className="rounded-md border border-[#d0c9a4] bg-white px-3 py-1.5 text-xs"
                       />
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-lg border border-[#e2d7b5] bg-[#fbf8ee] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6b6d4b]">
+                        Recurrence calendar overview
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setRecurrenceCalendarView("month")}
+                          className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase ${
+                            recurrenceCalendarView === "month"
+                              ? "border-[#8fae4c] bg-[#8fae4c] text-white"
+                              : "border-[#d0c9a4] bg-white text-[#4f5730]"
+                          }`}
+                        >
+                          Month
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRecurrenceCalendarView("week")}
+                          className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase ${
+                            recurrenceCalendarView === "week"
+                              ? "border-[#8fae4c] bg-[#8fae4c] text-white"
+                              : "border-[#d0c9a4] bg-white text-[#4f5730]"
+                          }`}
+                        >
+                          Week
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {WEEKDAY_LABELS.map((label) => (
+                        <div key={`weekday-${label}`} className="px-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7a7f54]">
+                          {label}
+                        </div>
+                      ))}
+                      {recurrenceCalendarDays.map((dateIso) => {
+                        const dayTasks = recurringTasksByDate[dateIso] || [];
+                        const inAnchorMonth = recurringEditDate ? dateIso.slice(0, 7) === recurringEditDate.slice(0, 7) : true;
+                        const isSelectedDay = dateIso === recurringEditDate;
+                        return (
+                          <button
+                            key={dateIso}
+                            type="button"
+                            onClick={() => setRecurringEditDate(dateIso)}
+                            className={`min-h-[86px] rounded-md border p-1 text-left ${
+                              isSelectedDay
+                                ? "border-[#8fae4c] bg-[#f1f6e3]"
+                                : inAnchorMonth
+                                  ? "border-[#e2d7b5] bg-white"
+                                  : "border-[#ece4c8] bg-[#f6f3e6]"
+                            }`}
+                          >
+                            <div className="text-[10px] font-semibold text-[#4f5730]">{dateIso.slice(-2)}</div>
+                            <div className="mt-1 space-y-1">
+                              {dayTasks.slice(0, 3).map((task) => (
+                                <div key={`${dateIso}-${task.id}`} className="truncate rounded bg-[#eef2dd] px-1 py-[1px] text-[9px] text-[#314123]" title={task.name}>
+                                  {task.name}
+                                </div>
+                              ))}
+                              {dayTasks.length > 3 && (
+                                <div className="text-[9px] text-[#6b6d4b]">+{dayTasks.length - 3} more</div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                   <div className="mt-1.5 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
