@@ -4273,6 +4273,40 @@ export default function AdminScheduleEditorPage() {
     }
   };
 
+  const removePersonFromSchedule = async (personName: string) => {
+    if (!personName || !selectedDate || scheduleMode !== "page" || !scheduleData) return;
+    setScheduleNote(null);
+    try {
+      const res = await fetch("/api/schedule/people", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dateLabel: selectedDate, name: personName }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Failed to remove person");
+
+      setScheduleData((prev) => {
+        if (!prev) return prev;
+        const idx = prev.people.findIndex(
+          (p) => p.trim().toLowerCase() === personName.trim().toLowerCase()
+        );
+        if (idx < 0) return prev;
+        const nextPeople = [...prev.people];
+        nextPeople.splice(idx, 1);
+        const nextCells = [...prev.cells];
+        nextCells.splice(idx, 1);
+        const nextExists = prev.cellExists ? [...prev.cellExists] : undefined;
+        if (nextExists) nextExists.splice(idx, 1);
+        return { ...prev, people: nextPeople, cells: nextCells, cellExists: nextExists };
+      });
+      setHasUnpublishedChanges(true);
+      setScheduleNote(`Removed ${personName} from the staging schedule.`);
+    } catch (err) {
+      console.error("Failed to remove person from schedule", err);
+      setScheduleNote("Unable to remove that person.");
+    }
+  };
+
   const copySchedule = async () => {
     if (scheduleMode !== "page") return;
     if (!copySourceDate || !copyTargetDate) {
@@ -5084,31 +5118,35 @@ export default function AdminScheduleEditorPage() {
 
   return (
     <div className="flex min-h-dvh w-full flex-col overflow-x-hidden bg-[#fdfbf4]">
-      <div className="border-b border-[#e2d7b5] bg-[#f7f4e6] px-1 sm:px-2 py-3">
+      <div className="border-b border-[var(--farm-border-light)] bg-[var(--farm-bg-panel)] px-2 sm:px-4 py-4">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           <div>
-            <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Admin schedule</p>
-            <h1 className="text-xl font-semibold text-[#314123]">{scheduleTitle}</h1>
-            <p className="text-xs text-[#5f5a3b]">
+            <p className="farm-label">Admin schedule</p>
+            <h1 className="text-xl sm:text-2xl font-bold farm-heading mt-0.5">{scheduleTitle}</h1>
+            <p className="text-xs text-[var(--farm-text-muted)] mt-1">
               Staging schedule with auto-synced volunteers and background saves.
             </p>
             {selectedEntry && (
-              <p className="mt-1 text-xs text-[#6a6c4d]">
-                Live: {selectedEntry.liveId ? "ready" : "missing"} • Staging:{" "}
-                {selectedEntry.stagingId ? "ready" : "missing"}
-              </p>
+              <div className="mt-2 flex items-center gap-3 text-xs">
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium ${selectedEntry.liveId ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                  Live: {selectedEntry.liveId ? "ready" : "missing"}
+                </span>
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium ${selectedEntry.stagingId ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                  Staging: {selectedEntry.stagingId ? "ready" : "missing"}
+                </span>
+              </div>
             )}
             {scheduleNote && (
-              <p className="mt-2 text-xs text-[#4b5133]">{scheduleNote}</p>
+              <p className="mt-2 text-xs font-medium text-[var(--farm-text)] bg-white/60 rounded-lg px-3 py-1.5 border border-[var(--farm-border-light)] inline-block">{scheduleNote}</p>
             )}
           </div>
-          <div className="flex flex-col gap-3 text-xs text-[#6a6c4d]">
+          <div className="flex flex-col gap-3 text-xs text-[var(--farm-text-muted)]">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={undoLastChange}
                 disabled={!undoStack.length}
-                className="rounded-md border border-[#d0c9a4] bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8] disabled:opacity-60"
+                className="farm-btn farm-btn-outline text-[11px] py-1.5"
               >
                 Undo
               </button>
@@ -5116,7 +5154,7 @@ export default function AdminScheduleEditorPage() {
                 type="button"
                 onClick={redoLastChange}
                 disabled={!redoStack.length}
-                className="rounded-md border border-[#d0c9a4] bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8] disabled:opacity-60"
+                className="farm-btn farm-btn-outline text-[11px] py-1.5"
               >
                 Redo
               </button>
@@ -5124,7 +5162,7 @@ export default function AdminScheduleEditorPage() {
                 type="button"
                 onClick={publishSchedule}
                 disabled={!selectedDate || scheduleMode !== "page"}
-                className="rounded-md bg-[#8fae4c] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#f9f9ec] shadow-sm transition hover:bg-[#7e9c44] disabled:opacity-60"
+                className="farm-btn farm-btn-primary text-[11px] py-1.5 px-5"
               >
                 Publish
               </button>
@@ -5611,12 +5649,15 @@ export default function AdminScheduleEditorPage() {
               {blackoutApplying ? "Applying…" : "Apply blackout"}
             </button>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-[#d0c9a4] bg-white/80 px-3 py-2 text-xs text-[#4b5133]">
+          <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-[#c8d99a] bg-gradient-to-r from-[#f4f7de] to-white px-4 py-3 text-xs text-[#4b5133] shadow-sm">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#5d7f3b]">
+              <span className="text-sm">+</span> Add person
+            </div>
             <input
               value={newCustomVolunteer}
               onChange={(event) => setNewCustomVolunteer(event.target.value)}
-              placeholder="Custom volunteer name"
-              className="h-8 min-w-[180px] rounded-md border border-[#d0c9a4] bg-white px-2 text-xs"
+              placeholder="Enter volunteer name…"
+              className="h-8 min-w-[200px] flex-1 rounded-lg border border-[#c8d99a] bg-white px-3 text-xs shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c]"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
@@ -5628,15 +5669,16 @@ export default function AdminScheduleEditorPage() {
               type="button"
               onClick={addCustomVolunteerRow}
               disabled={addingCustomVolunteer || !newCustomVolunteer.trim()}
-              className="h-8 rounded-md border border-[#d0c9a4] bg-white px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#314123] shadow-sm disabled:opacity-60"
+              className="h-8 rounded-lg bg-[#8fae4c] px-4 text-[10px] font-semibold uppercase tracking-[0.12em] text-white shadow-sm transition hover:bg-[#7e9c44] disabled:opacity-50"
             >
-              {addingCustomVolunteer ? "Adding…" : "Add volunteer row"}
+              {addingCustomVolunteer ? "Adding…" : "Add to schedule"}
             </button>
             {blackoutMode && (
               <span className="rounded-full bg-[#2f3b21] px-3 py-1 text-[10px] font-semibold text-white">
                 Blackout mode active
               </span>
             )}
+            <span className="text-[10px] text-[#7a7f54]">Hover a person name to remove them</span>
           </div>
 
           <details className="rounded-lg border border-dashed border-[#d0c9a4] bg-white/70 px-3 py-2 text-[11px] text-[#4b5133]">
@@ -5661,19 +5703,22 @@ export default function AdminScheduleEditorPage() {
           )}
           <div
             ref={scheduleContainerRef}
-            className={`relative mt-3 min-w-0 flex-1 overflow-auto rounded-xl border border-[#e2d7b5] bg-[#faf7eb] shadow-inner ${
+            className={`relative mt-3 min-w-0 flex-1 overflow-auto rounded-2xl border border-[var(--farm-border)] bg-[#faf7eb] shadow-sm ${
               scheduleLoading ? "pointer-events-none opacity-80" : ""
             } ${canvasExpanded ? "min-h-[70vh] lg:min-h-[calc(100vh-18rem)]" : ""}`}
           >
             {scheduleLoading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 text-sm font-semibold text-[#4b5133]">
-                Loading schedule…
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm rounded-2xl">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--farm-text)]">
+                  <div className="h-4 w-4 rounded-full border-2 border-[var(--farm-secondary)] border-t-transparent animate-spin" />
+                  Loading schedule…
+                </div>
               </div>
             )}
             <table className="w-full table-fixed border-collapse text-[10px] sm:text-[11px]">
-  <thead className="bg-[#e5e7c5]">
+  <thead className="bg-gradient-to-b from-[#e5e7c5] to-[#dce0b8]">
     <tr>
-      <th className="w-[74px] sm:w-[96px] border border-[#d1d4aa] px-1 sm:px-1.5 py-1 text-left text-[8px] sm:text-[9px] font-semibold uppercase tracking-[0.14em] text-[#5d7f3b] sticky left-0 top-0 z-30 bg-[#e5e7c5]">
+      <th className="w-[80px] sm:w-[110px] border border-[#d1d4aa] px-1.5 sm:px-2 py-1.5 text-left text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--farm-accent)] sticky left-0 top-0 z-30 bg-gradient-to-b from-[#e5e7c5] to-[#dce0b8]">
         Person
       </th>
       {visibleSlotsWithIndex.map(({ slot }) => (
@@ -5724,10 +5769,24 @@ export default function AdminScheduleEditorPage() {
   <tbody>
     {scheduleData?.people.map((person, rowIdx) => (
       <tr key={person} className={rowIdx % 2 === 0 ? "bg-[#faf8ea]" : "bg-[#f4f2df]"}>
-        <td className="border border-[#d1d4aa] px-1.5 sm:px-2 py-1.5 align-top text-[10px] sm:text-[11px] font-semibold text-[#4f5730] sticky left-0 z-20 bg-[#f6f4e3]">
-          <div className="flex items-center justify-between gap-2">
-            <span>{person}</span>
-            <span className="text-[10px] text-[#7a7f54]">{rowIdx + 1}</span>
+        <td className="group/person border border-[#d1d4aa] px-1.5 sm:px-2 py-1.5 align-top text-[10px] sm:text-[11px] font-semibold text-[#4f5730] sticky left-0 z-20 bg-[#f6f4e3]">
+          <div className="flex items-center justify-between gap-1">
+            <span className="truncate">{person}</span>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[10px] text-[#7a7f54]">{rowIdx + 1}</span>
+              <button
+                type="button"
+                title={`Remove ${person} from schedule`}
+                onClick={() => {
+                  if (window.confirm(`Remove ${person} from this schedule? Their assigned tasks for this date will be cleared.`)) {
+                    void removePersonFromSchedule(person);
+                  }
+                }}
+                className="hidden group-hover/person:inline-flex items-center justify-center h-5 w-5 rounded-full border border-red-200 bg-red-50 text-red-500 text-[10px] hover:bg-red-100 hover:text-red-700 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </td>
         {visibleSlotsWithIndex.map(({ slot, index: colIdx }) => {

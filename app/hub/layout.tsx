@@ -273,16 +273,16 @@ export default function HubLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <PushNotificationManager userName={name} userRole={userType} />
-      <main className="min-h-screen flex flex-col bg-[#f8f4e3] text-[#3b4224]">
+      <main className="min-h-screen flex flex-col bg-[var(--farm-bg)] text-[var(--farm-text-dark)]">
         {/* Header bar */}
-        <header className="w-full bg-[#a0b764] text-[#f9f9ec] shadow-md relative">
-          <div className="w-full px-2 sm:px-4 py-2 sm:py-3 flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <header className="w-full bg-gradient-to-r from-[var(--farm-primary)] to-[#8fae4c] text-[#f9f9ec] shadow-lg relative">
+          <div className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center sm:justify-between">
             {/* Top row on mobile: logo + toggles */}
             <div className="flex items-center justify-between gap-3 w-full">
               <div className="flex items-center gap-2 sm:hidden">
                 <button
                   onClick={() => setMobileMenuOpen(true)}
-                  className="rounded-md border border-[#e5eacc]/60 bg-[#f4f7de]/90 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#56652f] hover:bg-white transition-colors shadow-sm"
+                  className="rounded-xl border border-white/20 bg-white/15 backdrop-blur-sm px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-white/25 transition-colors shadow-sm"
                   aria-label="Open navigation"
                 >
                   ☰
@@ -291,14 +291,14 @@ export default function HubLayout({ children }: { children: ReactNode }) {
 
               {/* Center: logo + title */}
               <div className="flex items-center gap-3 flex-1 sm:flex-none sm:justify-center">
-                <div className="h-9 w-9 rounded-full bg-[#f1e4b5] flex items-center justify-center shadow-sm">
+                <div className="h-9 w-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-md">
                   <span className="text-xl">🐐</span>
                 </div>
                 <div className="flex flex-col leading-tight">
-                  <span className="text-xs sm:text-sm font-semibold tracking-[0.16em] uppercase">
-                    Wai &amp; Aina Homeapp
+                  <span className="text-xs sm:text-sm font-bold tracking-[0.16em] uppercase">
+                    Wai &amp; Aina
                   </span>
-                  <span className="text-[10px] sm:text-[11px] text-[#f5f7eb]/90">
+                  <span className="text-[10px] sm:text-[11px] text-white/80">
                     Daily life &amp; schedule hub
                   </span>
                 </div>
@@ -307,7 +307,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
               <div className="flex items-center gap-2 sm:hidden">
                 <button
                   onClick={handleLogout}
-                  className="rounded-md border border-[#e5eacc]/60 bg-[#f4f7de]/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#56652f] hover:bg-white transition-colors"
+                  className="rounded-xl border border-white/20 bg-white/15 backdrop-blur-sm px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-white/25 transition-colors"
                 >
                   Logout
                 </button>
@@ -408,8 +408,8 @@ export default function HubLayout({ children }: { children: ReactNode }) {
           <div className="hidden sm:flex items-center gap-3">
             {name && (
               <div className="flex flex-col items-end gap-1 text-right">
-                <span className="text-[11px] uppercase tracking-[0.16em]">
-                  Logged in as <span className="font-semibold">{name}</span>
+                <span className="text-[11px] uppercase tracking-[0.16em] text-white/90">
+                  <span className="font-bold">{name}</span>
                 </span>
                 {userType && (
                   <span
@@ -424,7 +424,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
             )}
             <button
               onClick={handleLogout}
-              className="rounded-md border border-[#e5eacc]/60 bg-[#f4f7de]/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#56652f] hover:bg-white transition-colors"
+              className="rounded-xl border border-white/20 bg-white/15 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-white hover:bg-white/25 transition-colors"
             >
               Logout
             </button>
@@ -467,16 +467,16 @@ export default function HubLayout({ children }: { children: ReactNode }) {
               mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#e7dfc0] bg-[#f0ead4]">
-              <div className="flex items-center gap-2 text-[#485926]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--farm-border-light)] bg-[var(--farm-bg-warm)]">
+              <div className="flex items-center gap-2 text-[var(--farm-text-dark)]">
                 <span className="text-lg">📋</span>
-                <span className="text-xs font-semibold uppercase tracking-[0.14em]">
+                <span className="text-xs font-bold uppercase tracking-[0.14em]">
                   Quick Menu
                 </span>
               </div>
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="rounded-full bg-white text-[#3b4224] h-8 w-8 flex items-center justify-center shadow hover:shadow-md transition"
+                className="rounded-xl bg-white text-[var(--farm-text-dark)] h-8 w-8 flex items-center justify-center shadow-sm hover:shadow-md transition border border-[var(--farm-border)]"
                 aria-label="Close navigation"
               >
                 ✕
@@ -612,8 +612,8 @@ export default function HubLayout({ children }: { children: ReactNode }) {
       )}
 
       {canAccessWork && workLinks.length > 0 && (
-        <div className="bg-[#f7f4e6] border-b border-[#d0c9a4]">
-          <div className="w-full px-2 sm:px-4 py-2 flex flex-wrap gap-2">
+        <div className="bg-[var(--farm-bg-panel)] border-b border-[var(--farm-border)]">
+          <div className="w-full px-3 sm:px-5 py-2.5 flex flex-wrap gap-2">
             {workLinks.map((link) => (
               <WorkNavLink key={link.href} href={link.href} active={pathname === link.href}>
                 {link.label}
@@ -625,7 +625,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
 
       {/* Page body */}
       <section className="flex-1">
-        <div className="w-full px-2 sm:px-4 py-4 sm:py-6">
+        <div className="w-full px-3 sm:px-5 py-5 sm:py-7">
           {children}
         </div>
       </section>
@@ -701,10 +701,10 @@ function WorkNavLink({
   return (
     <Link
       href={href}
-      className={`rounded-full px-2 sm:px-3 py-1.5 text-[11px] sm:text-sm font-semibold uppercase tracking-[0.12em] transition shadow-sm border ${
+      className={`rounded-xl px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.1em] transition-all duration-150 border ${
         active
-          ? "bg-[#a0b764] text-white border-[#8fae4c]"
-          : "bg-white text-[#485926] border-[#d0c9a4] hover:bg-[#f4f7de]"
+          ? "bg-[var(--farm-primary)] text-white border-[var(--farm-secondary)] shadow-md"
+          : "bg-white text-[var(--farm-text-dark)] border-[var(--farm-border)] hover:bg-[var(--farm-bg-highlight)] hover:border-[var(--farm-border-green)] hover:shadow-sm"
       }`}
     >
       {children}

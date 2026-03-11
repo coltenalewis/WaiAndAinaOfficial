@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseRequest } from "@/lib/supabase";
+import { toIsoDate } from "@/lib/utils";
 
 type ScheduleRow = { id: string };
 type SchedulePersonRow = { id: string; name: string; order_index?: number };
@@ -10,14 +11,6 @@ type UserRow = {
   active: boolean;
   user_role?: { name?: string | null };
 };
-
-function toIsoDate(label?: string | null) {
-  if (!label) return null;
-  if (label.includes("-")) return label;
-  const [month, day, year] = label.split("/");
-  if (!month || !day || !year) return null;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
 
 function parseCell(value?: string | null) {
   if (!value?.trim()) return { tasks: [] as string[], note: "" };

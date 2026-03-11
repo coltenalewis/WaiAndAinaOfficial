@@ -65,38 +65,32 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-2 py-6">
-      <div className="rounded-3xl border border-[#d0c9a4] bg-white/80 p-6 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <div className="farm-card rounded-3xl p-6 sm:p-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Admin hub</p>
-            <h1 className="text-2xl font-semibold text-[#314123]">Admin Control Room</h1>
-            <p className="text-sm text-[#5f5a3b]">
+            <p className="farm-label">Admin hub</p>
+            <h1 className="text-2xl sm:text-3xl font-bold farm-heading mt-1">Admin Control Room</h1>
+            <p className="text-sm text-[var(--farm-text-muted)] mt-1">
               Jump into schedules, tasks, and user management from one place.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/hub"
-              className="rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8]"
-            >
+            <Link href="/hub" className="farm-btn farm-btn-outline">
               View live schedule
             </Link>
-            <Link
-              href="/hub/admin/milk-production"
-              className="rounded-md bg-[#7f9b5b] px-2 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white shadow-sm transition hover:bg-[#6f8b4d]"
-            >
+            <Link href="/hub/admin/milk-production" className="farm-btn farm-btn-primary">
               Milk production
             </Link>
           </div>
         </div>
 
         {message ? (
-          <p className="mt-4 text-sm font-semibold text-[#4b5133]">{message}</p>
+          <p className="mt-4 text-sm font-semibold text-[var(--farm-text)]">{message}</p>
         ) : null}
 
         {!authorized && (
-          <div className="mt-4 rounded-xl border border-[#e2d7b5] bg-[#f9f6e7] p-4 text-sm text-[#7a7f54]">
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             Only administrators can access admin tools. If you need access, please contact a site admin.
           </div>
         )}
@@ -104,136 +98,126 @@ export default function AdminPage() {
 
       {authorized && (
         <>
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
-              <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Schedule</p>
-              <h2 className="text-lg font-semibold text-[#314123]">Admin schedule</h2>
-              <p className="mt-2 text-sm text-[#5f5a3b]">
-                Edit the staging schedule, drag tasks, and publish updates.
-              </p>
-              <Link
-                href="/hub/admin/schedule"
-                className="mt-4 inline-flex items-center justify-center rounded-md bg-[#8fae4c] px-2 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#f9f9ec] shadow-md transition hover:bg-[#7e9c44]"
-              >
-                Open schedule editor
-              </Link>
-            </div>
-
-            <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
-              <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Shifts</p>
-              <h2 className="text-lg font-semibold text-[#314123]">Shift editor</h2>
-              <p className="mt-2 text-sm text-[#5f5a3b]">
-                Update shift names, times, and ordering in one place.
-              </p>
-              <Link
-                href="/hub/admin/shifts"
-                className="mt-4 inline-flex items-center justify-center rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8]"
-              >
-                Open shift editor
-              </Link>
-            </div>
-
-            <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
-              <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Tasks</p>
-              <h2 className="text-lg font-semibold text-[#314123]">Task editor</h2>
-              <p className="mt-2 text-sm text-[#5f5a3b]">
-                Organize recurring tasks, update statuses, and tune task types.
-              </p>
-              <Link
-                href="/hub/admin/tasks"
-                className="mt-4 inline-flex items-center justify-center rounded-md bg-[#6f8f3d] px-2 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#f9f9ec] shadow-md transition hover:bg-[#5f7f35]"
-              >
-                Open task editor
-              </Link>
-            </div>
-
-            <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
-              <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">People</p>
-              <h2 className="text-lg font-semibold text-[#314123]">User management</h2>
-              <p className="mt-2 text-sm text-[#5f5a3b]">
-                Add new teammates, edit roles, and manage access in one view.
-              </p>
-              <Link
-                href="/hub/admin/users"
-                className="mt-4 inline-flex items-center justify-center rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#314123] shadow-sm transition hover:bg-[#f1edd8]"
-              >
-                Open user management
-              </Link>
-            </div>
-
-            <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
-              <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Analytics</p>
-              <h2 className="text-lg font-semibold text-[#314123]">Admin analytics</h2>
-              <p className="mt-2 text-sm text-[#5f5a3b]">
-                Review daily and weekly workload trends across the farm.
-              </p>
-              <Link
-                href="/hub/admin/analytics"
-                className="mt-4 inline-flex items-center justify-center rounded-md bg-[#7f9b5b] px-2 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white shadow-md transition hover:bg-[#6f8b4d]"
-              >
-                Open analytics
-              </Link>
-            </div>
-
-            <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
-              <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">
-                Milk production
-              </p>
-              <h2 className="text-lg font-semibold text-[#314123]">Milk reporting</h2>
-              <p className="mt-2 text-sm text-[#5f5a3b]">
-                Log milk yields and track distribution plans in one place.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                label: "Schedule",
+                title: "Admin schedule",
+                description: "Edit the staging schedule, drag tasks, and publish updates.",
+                href: "/hub/admin/schedule",
+                btnLabel: "Open schedule editor",
+                primary: true,
+                icon: "📋",
+              },
+              {
+                label: "Shifts",
+                title: "Shift editor",
+                description: "Update shift names, times, and ordering in one place.",
+                href: "/hub/admin/shifts",
+                btnLabel: "Open shift editor",
+                primary: false,
+                icon: "🕐",
+              },
+              {
+                label: "Tasks",
+                title: "Task editor",
+                description: "Organize recurring tasks, update statuses, and tune task types.",
+                href: "/hub/admin/tasks",
+                btnLabel: "Open task editor",
+                primary: true,
+                icon: "📝",
+              },
+              {
+                label: "People",
+                title: "User management",
+                description: "Add new teammates, edit roles, and manage access in one view.",
+                href: "/hub/admin/users",
+                btnLabel: "Open user management",
+                primary: false,
+                icon: "👥",
+              },
+              {
+                label: "Analytics",
+                title: "Admin analytics",
+                description: "Review daily and weekly workload trends across the farm.",
+                href: "/hub/admin/analytics",
+                btnLabel: "Open analytics",
+                primary: true,
+                icon: "📊",
+              },
+              {
+                label: "Milk production",
+                title: "Milk reporting",
+                description: "Log milk yields and track distribution plans in one place.",
+                href: "/hub/admin/milk-production",
+                btnLabel: "Open milk production",
+                primary: true,
+                icon: "🥛",
+              },
+            ].map((card) => (
+              <div key={card.href} className="farm-card group hover:-translate-y-0.5 transition-all duration-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="h-9 w-9 rounded-xl bg-[var(--farm-bg-highlight)] flex items-center justify-center text-lg shadow-sm">
+                    {card.icon}
+                  </div>
+                  <div>
+                    <p className="farm-label text-[10px]">{card.label}</p>
+                    <h2 className="text-base font-bold farm-heading">{card.title}</h2>
+                  </div>
+                </div>
+                <p className="text-sm text-[var(--farm-text-muted)] mt-1 mb-4">
+                  {card.description}
+                </p>
                 <Link
-                  href="/hub/admin/milk-production"
-                  className="inline-flex items-center justify-center rounded-md bg-[#7f9b5b] px-2 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white shadow-md transition hover:bg-[#6f8b4d]"
+                  href={card.href}
+                  className={`farm-btn ${card.primary ? "farm-btn-primary" : "farm-btn-outline"} text-[11px]`}
                 >
-                  Open milk production
+                  {card.btnLabel}
                 </Link>
               </div>
-            </div>
+            ))}
           </div>
 
-          <div className="rounded-2xl border border-[#d0c9a4] bg-white/80 p-5 shadow-sm">
+          <div className="farm-card">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-[#7a7f54]">Tags</p>
-                <h2 className="text-lg font-semibold text-[#314123]">Capability tags</h2>
-                <p className="text-sm text-[#5f5a3b]">
+                <p className="farm-label">Tags</p>
+                <h2 className="text-lg font-bold farm-heading mt-0.5">Capability tags</h2>
+                <p className="text-sm text-[var(--farm-text-muted)]">
                   Add and review shared capability tags for tasks and users.
                 </p>
               </div>
             </div>
             {capabilityMessage && (
-              <p className="mt-3 text-sm font-semibold text-[#4b5133]">{capabilityMessage}</p>
+              <p className="mt-3 text-sm font-semibold text-[var(--farm-text)]">{capabilityMessage}</p>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
               <input
                 value={capabilityName}
                 onChange={(e) => setCapabilityName(e.target.value)}
-                className="flex-1 rounded-md border border-[#d0c9a4] px-3 py-2 text-sm"
+                className="farm-input flex-1"
                 placeholder="Add new capability"
               />
               <button
                 type="button"
                 onClick={handleCreateCapability}
-                className="rounded-md bg-[#8fae4c] px-2 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f9f9ec] shadow-md transition hover:bg-[#7e9c44]"
+                className="farm-btn farm-btn-primary"
               >
                 Add tag
               </button>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#4f5730]">
+            <div className="mt-3 flex flex-wrap gap-2">
               {capabilities.length ? (
                 capabilities.map((capability) => (
                   <span
                     key={capability.id}
-                    className="rounded-full border border-[#d0c9a4] bg-[#f6f1dd] px-2 py-[2px] font-semibold"
+                    className="rounded-full border border-[var(--farm-border)] bg-[var(--farm-bg-highlight)] px-3 py-1 text-[11px] font-semibold text-[var(--farm-text-label)]"
                   >
                     {capability.name}
                   </span>
                 ))
               ) : (
-                <span className="text-xs text-[#7a7f54]">No capability tags yet.</span>
+                <span className="text-xs text-[var(--farm-text-muted)]">No capability tags yet.</span>
               )}
             </div>
           </div>

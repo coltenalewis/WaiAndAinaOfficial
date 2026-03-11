@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, supabaseRequest } from "@/lib/supabase";
+import { toIsoDate } from "@/lib/utils";
 
 type DailyUpdatePayload = {
   id: string;
@@ -9,15 +10,6 @@ type DailyUpdatePayload = {
   extra_notes: string | null;
   requests: string | null;
 };
-
-function toIsoDate(label?: string | null) {
-  if (!label) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return label;
-  if (!label.includes("/")) return "";
-  const [month, day, year] = label.split("/");
-  if (!month || !day || !year) return "";
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
 
 function fallbackSummary(dateIso: string, updates: DailyUpdatePayload[]) {
   if (!updates.length) {

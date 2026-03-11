@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, supabaseRequest } from "@/lib/supabase";
 import { sendPushNotifications } from "@/lib/push";
+import { toIsoDate } from "@/lib/utils";
 
 const TABLE_NAME = "schedule_custom_tables";
 const DEFAULT_ROWS = 3;
@@ -19,15 +20,6 @@ type CustomTableRow = {
   column_header_type: string | null;
   cell_type: string | null;
 };
-
-function toIsoDate(label?: string | null) {
-  if (!label) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return label;
-  if (!label.includes("/")) return null;
-  const [month, day, year] = label.split("/");
-  if (!month || !day || !year) return null;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
 
 function buildDefaultHeaders(prefix: string, count: number) {
   return Array.from({ length: count }, (_, idx) => `${prefix} ${idx + 1}`);

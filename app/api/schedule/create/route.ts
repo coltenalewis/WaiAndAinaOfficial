@@ -1,15 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseRequest } from "@/lib/supabase";
+import { toIsoDate } from "@/lib/utils";
 
 type ScheduleRow = { id: string };
-
-function toIsoDate(label?: string | null) {
-  if (!label) return null;
-  if (label.includes("-")) return label;
-  const [month, day, year] = label.split("/");
-  if (!month || !day || !year) return null;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);

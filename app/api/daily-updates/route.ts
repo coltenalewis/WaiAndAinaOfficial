@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, supabaseRequest } from "@/lib/supabase";
 import { sendPushNotifications } from "@/lib/push";
+import { toIsoDate } from "@/lib/utils";
 
 type DailyUpdatePayload = {
   id: string;
@@ -19,15 +20,6 @@ type DailyTaskStatus = {
   taskName: string;
   status: string;
 };
-
-function toIsoDate(label?: string | null) {
-  if (!label) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return label;
-  if (!label.includes("/")) return "";
-  const [month, day, year] = label.split("/");
-  if (!month || !day || !year) return "";
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
 
 function summarizeFallback(userName: string, statuses: string[], notes: string, requests: string) {
   const completed = statuses.filter((status) => status.toLowerCase() === "completed").length;

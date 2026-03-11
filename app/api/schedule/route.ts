@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, supabaseRequest } from "@/lib/supabase";
+import { toIsoDate, toDateLabel, getHawaiiIsoDate } from "@/lib/utils";
 
 type SlotRow = {
   id: string;
@@ -38,35 +39,6 @@ type UserRow = {
 };
 
 type Slot = { id: string; label: string; timeRange?: string; isMeal?: boolean };
-
-function toIsoDate(label?: string | null) {
-  if (!label) return null;
-  if (label.includes("-")) return label;
-  const [month, day, year] = label.split("/");
-  if (!month || !day || !year) return null;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
-
-function getTodayIsoDate() {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Pacific/Honolulu",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(new Date());
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
-  if (!year || !month || !day) return new Date().toISOString().slice(0, 10);
-  return `${year}-${month}-${day}`;
-}
-
-function toLabel(date: string) {
-  const [year, month, day] = date.split("-");
-  if (!year || !month || !day) return date;
-  return `${month}/${day}/${year}`;
-}
 
 function isMealShift(label: string) {
   const lower = label.toLowerCase();
@@ -272,13 +244,13 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const dateLabel = url.searchParams.get("date") || "";
     const isStaging = url.searchParams.get("staging") === "1";
-    const isoDate = toIsoDate(dateLabel) || getTodayIsoDate();
+    const isoDate = toIsoDate(dateLabel) || getHawaiiIsoDate();
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
         people: [],
         slots: [],
         cells: [],
-        scheduleDate: toLabel(isoDate),
+        scheduleDate: toDateLabel(isoDate),
         message: "Supabase is not configured for schedules yet.",
       });
     }
@@ -309,7 +281,7 @@ export async function GET(req: Request) {
         people: allVolunteers,
         slots,
         cells: emptyCells,
-        scheduleDate: toLabel(isoDate),
+        scheduleDate: toDateLabel(isoDate),
         ...(isStaging ? {} : { message: "No live schedule published yet." }),
       });
     }
@@ -379,7 +351,7 @@ export async function GET(req: Request) {
       cells: isStaging ? detailedMatrix : stringMatrix,
       taskCells: detailedMatrix,
       cellExists: isStaging ? existsMatrix : undefined,
-      scheduleDate: toLabel(isoDate),
+      scheduleDate: toDateLabel(isoDate),
     });
   } catch (err) {
     console.error("Failed to load schedule", err);

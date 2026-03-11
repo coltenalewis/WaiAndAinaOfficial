@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, supabaseRequest } from "@/lib/supabase";
 import { sendPushNotifications } from "@/lib/push";
+import { toIsoDate } from "@/lib/utils";
 
 const PHOTO_BUCKET = "Photos";
 
@@ -113,17 +114,6 @@ function normalizeRequestedName(value?: string | null) {
     .split(/\s*[•·,]\s*/)[0]
     ?.replace(/\s+/g, " ")
     .trim() || "";
-}
-
-function toIsoDate(label?: string | null) {
-  if (!label) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return label;
-  if (label.includes("/")) {
-    const [month, day, year] = label.split("/");
-    if (!month || !day || !year) return null;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  }
-  return null;
 }
 
 function getHawaiiDateLabel() {

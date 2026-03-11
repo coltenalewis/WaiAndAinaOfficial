@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, supabaseRequest } from "@/lib/supabase";
+import { toIsoDate } from "@/lib/utils";
 
 const MAX_PHOTO_BYTES = 150 * 1024;
 const BUCKET_NAME = "Photos";
@@ -10,17 +11,6 @@ function normalizePhotoEntries(raw: unknown): string[] {
     .flatMap((entry) => String(entry).split(","))
     .map((entry) => entry.trim())
     .filter(Boolean);
-}
-
-function toIsoDate(label?: string | null) {
-  if (!label) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return label;
-  if (label.includes("/")) {
-    const [month, day, year] = label.split("/");
-    if (!month || !day || !year) return null;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  }
-  return null;
 }
 
 function buildPublicUrl(path: string) {

@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseRequest } from "@/lib/supabase";
+import { toIsoDate } from "@/lib/utils";
 
 type ScheduleRow = { id: string };
 type SchedulePersonRow = { id: string; name: string; order_index: number };
 type ShiftRow = { id: string };
-
-function toIsoDate(label?: string | null) {
-  if (!label) return null;
-  if (label.includes("-")) return label;
-  const [month, day, year] = label.split("/");
-  if (!month || !day || !year) return null;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
 
 export async function GET() {
   return NextResponse.json({ people: [] });
@@ -129,5 +122,70 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("Failed to add schedule person", err);
     return NextResponse.json({ error: "Unable to add person." }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const body = await req.json().catch(() => null);
+  const personName = String(body?.name || "").trim();
+  const isoDate = toIsoDate(body?.dateLabel);
+
+  if (!personName) {
+    return NextResponse.json({ error: "Name is required." }, { status: 400 });
+  }
+
+  if (!isoDate) {
+    return NextResponse.json({ error: "Schedule date is required." }, { status: 400 });
+  }
+
+  try {
+    const scheduleRows = await supabaseRequest<ScheduleRow[]>("schedules", {
+      query: {
+        select: "id",
+        schedule_date: `eq.${isoDate}`,
+        state: "eq.staging",
+        limit: 1,
+      },
+    });
+
+    const scheduleId = scheduleRows?.[0]?.id ?? null;
+    if (!scheduleId) {
+      return NextResponse.json({ error: "No staging schedule found for that date." }, { status: 404 });
+    }
+
+    const people = await supabaseRequest<SchedulePersonRow[]>("schedule_people", {
+      query: {
+        select: "id,name,order_index",
+        schedule_id: `eq.${scheduleId}`,
+      },
+    });
+
+    const match = people.find(
+      (person) => person.name.trim().toLowerCase() === personName.toLowerCase()
+    );
+
+    if (!match) {
+      return NextResponse.json({ error: "Person not found on this schedule." }, { status: 404 });
+    }
+
+    await supabaseRequest("schedule_cells", {
+      method: "DELETE",
+      query: {
+        schedule_id: `eq.${scheduleId}`,
+        person_id: `eq.${match.id}`,
+      },
+    });
+
+    await supabaseRequest("schedule_people", {
+      method: "DELETE",
+      query: {
+        id: `eq.${match.id}`,
+      },
+    });
+
+    return NextResponse.json({ ok: true, removed: personName });
+  } catch (err) {
+    console.error("Failed to remove schedule person", err);
+    return NextResponse.json({ error: "Unable to remove person." }, { status: 500 });
   }
 }

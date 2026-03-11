@@ -229,74 +229,76 @@ export default function HomePage() {
     return (
       <Link
         href={href}
-        className={`inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition shadow-sm ${
+        className={`inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md ${
           primary
-            ? "bg-[#a0b764] text-white hover:bg-[#8ba450]"
-            : "bg-white/80 text-[#3b4224] hover:bg-white"
+            ? "bg-[var(--farm-primary)] text-white hover:bg-[var(--farm-primary-hover)] hover:-translate-y-0.5"
+            : "bg-white/80 text-[var(--farm-text-dark)] hover:bg-white hover:-translate-y-0.5"
         }`}
       >
         {label}
-        <span aria-hidden>→</span>
+        <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
       </Link>
     );
   }
 
   return (
-      <main className="min-h-screen bg-[#f8f4e3] text-[#3b4224] flex flex-col">
+      <main className="min-h-screen bg-[var(--farm-bg)] text-[var(--farm-text-dark)] flex flex-col">
       {/* Top navigation */}
-      <header className="sticky top-0 z-20 w-full bg-white/90 backdrop-blur shadow-sm">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 py-3 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-[var(--farm-border)] shadow-sm">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
-              className="md:hidden inline-flex items-center justify-center rounded-full border border-[#d0c9a4] bg-white h-10 w-10 text-lg shadow-sm"
+              className="md:hidden inline-flex items-center justify-center rounded-xl border border-[var(--farm-border)] bg-white h-10 w-10 text-lg shadow-sm hover:bg-[var(--farm-bg-highlight)] transition-colors"
               onClick={() => setShowMobileMenu(true)}
               aria-label="Open menu"
             >
               ☰
             </button>
-            <div className="h-10 w-10 rounded-full bg-[#f1e4b5] flex items-center justify-center shadow">
-              <span className="text-xl">🐐</span>
-            </div>
-            <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold tracking-[0.16em] uppercase text-[#5d7f3b]">
-                Wai &amp; Aina
-              </span>
-              <span className="text-[11px] text-[#7a7f54]">Sustainable living &amp; care</span>
-            </div>
+            <Link href="/" className="flex items-center gap-3 group">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[#f1e4b5] to-[#e8d89e] flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+                <span className="text-xl">🐐</span>
+              </div>
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-bold tracking-[0.16em] uppercase text-[var(--farm-accent)]">
+                  Wai &amp; Aina
+                </span>
+                <span className="text-[11px] text-[var(--farm-text-muted)]">Sustainable living &amp; care</span>
+              </div>
+            </Link>
           </div>
 
-          <nav className="hidden md:flex items-center gap-3 text-sm font-semibold">
-            <Link href="#home" className="rounded-full px-3 py-1.5 hover:bg-[#eef2d9]">
+          <nav className="hidden md:flex items-center gap-1 text-sm font-semibold">
+            <Link href="#home" className="rounded-xl px-3 py-2 hover:bg-[var(--farm-bg-hover)] transition-colors">
               Home
             </Link>
-            <Link href="#about" className="rounded-full px-3 py-1.5 hover:bg-[#eef2d9]">
+            <Link href="#about" className="rounded-xl px-3 py-2 hover:bg-[var(--farm-bg-hover)] transition-colors">
               About Us
             </Link>
             <div className="relative group">
-              <button className="rounded-full px-3 py-1.5 hover:bg-[#eef2d9] inline-flex items-center gap-2">
-                Farm Information <span className="text-xs">▾</span>
+              <button className="rounded-xl px-3 py-2 hover:bg-[var(--farm-bg-hover)] inline-flex items-center gap-1.5 transition-colors">
+                Farm Info <span className="text-[10px] opacity-60">▾</span>
               </button>
-              <div className="absolute right-0 mt-2 min-w-[200px] rounded-xl bg-white border border-[#d0c9a4] shadow-lg opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-1 transition">
-                <div className="flex flex-col divide-y divide-[#f0ead4]">
-                  <Link href="/hub/guides/animalpedia" className="px-4 py-2.5 hover:bg-[#f8f4e3]">
-                    Animalpedia
+              <div className="absolute right-0 mt-1 min-w-[220px] rounded-xl bg-white border border-[var(--farm-border)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 pointer-events-none group-hover:pointer-events-auto transition-all duration-200">
+                <div className="flex flex-col p-1.5">
+                  <Link href="/hub/guides/animalpedia" className="rounded-lg px-3 py-2.5 hover:bg-[var(--farm-bg-highlight)] transition-colors flex items-center gap-2">
+                    <span>🐾</span> Animalpedia
                   </Link>
-                  <Link href="/hub/guides/farm-map" className="px-4 py-2.5 hover:bg-[#f8f4e3]">
-                    Farm Map
+                  <Link href="/hub/guides/farm-map" className="rounded-lg px-3 py-2.5 hover:bg-[var(--farm-bg-highlight)] transition-colors flex items-center gap-2">
+                    <span>🗺️</span> Farm Map
                   </Link>
-                  <Link href="/hub/guides/how-to" className="px-4 py-2.5 hover:bg-[#f8f4e3]">
-                    Guides
+                  <Link href="/hub/guides/how-to" className="rounded-lg px-3 py-2.5 hover:bg-[var(--farm-bg-highlight)] transition-colors flex items-center gap-2">
+                    <span>📘</span> Guides
                   </Link>
                 </div>
               </div>
             </div>
             {canAccessWork && (
-              <Link href="/hub/dashboard" className="rounded-full px-3 py-1.5 hover:bg-[#eef2d9]">
-                Work Dashboard
+              <Link href="/hub/dashboard" className="rounded-xl px-3 py-2 hover:bg-[var(--farm-bg-hover)] transition-colors">
+                Dashboard
               </Link>
             )}
             {session && (
-              <Link href="/hub/settings" className="rounded-full px-3 py-1.5 hover:bg-[#eef2d9]">
+              <Link href="/hub/settings" className="rounded-xl px-3 py-2 hover:bg-[var(--farm-bg-hover)] transition-colors">
                 Settings
               </Link>
             )}
@@ -304,20 +306,20 @@ export default function HomePage() {
 
           <div className="flex items-center gap-2">
             {session?.name && (
-              <span className="hidden sm:inline text-xs text-[#56652f] font-semibold">
+              <span className="hidden sm:inline text-xs text-[var(--farm-accent)] font-semibold">
                 Hi, {session.name.split(" ")[0]}
               </span>
             )}
             <button
               onClick={() => setShowLogin(true)}
-              className="inline-flex items-center rounded-full border border-[#c8cba0] bg-white px-3 py-2 text-xs font-semibold hover:bg-[#f1edd8] shadow-sm"
+              className="inline-flex items-center rounded-xl border border-[var(--farm-border)] bg-white px-4 py-2 text-xs font-semibold hover:bg-[var(--farm-bg-warm)] shadow-sm transition-colors"
             >
               {session ? "Switch user" : "Login"}
             </button>
             {session && (
               <button
                 onClick={handleLogout}
-                className="inline-flex items-center rounded-full bg-[#e4e4d0] text-[#4a4f2f] px-3 py-2 text-xs font-semibold shadow hover:bg-[#d7d9c0]"
+                className="inline-flex items-center rounded-xl bg-[var(--farm-bg-warm)] text-[var(--farm-text)] px-4 py-2 text-xs font-semibold shadow-sm hover:bg-[#d7d9c0] transition-colors"
               >
                 Logout
               </button>
@@ -327,13 +329,24 @@ export default function HomePage() {
       </header>
 
       {session?.userType?.toLowerCase() === "admin" && (
-        <section className="mx-auto mt-4 w-full max-w-7xl px-2 sm:px-4">
-          <div className="rounded-xl border border-[#d0c9a4] bg-white/85 p-4 shadow-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#4b5133]">Homepage editor</h2>
-              <span className="text-xs text-[#6b6f4c]">
+        <section className="mx-auto mt-4 w-full max-w-7xl px-3 sm:px-6">
+          <div className="farm-card">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">✏️</span>
+                <h2 className="farm-label">Homepage editor</h2>
+              </div>
+              <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
+                homeContentStatus === "saving"
+                  ? "bg-amber-50 text-amber-700"
+                  : homeContentStatus === "saved"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : homeContentStatus === "error"
+                      ? "bg-red-50 text-red-700"
+                      : "text-[var(--farm-text-muted)]"
+              }`}>
                 {homeContentStatus === "saving"
-                  ? "Auto-saving..."
+                  ? "Saving…"
                   : homeContentStatus === "saved"
                     ? "Saved"
                     : homeContentStatus === "error"
@@ -341,7 +354,7 @@ export default function HomePage() {
                       : "Ready"}
               </span>
             </div>
-            <div className="grid gap-2 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-3">
               <input
                 value={homeContent.heroTitle}
                 onChange={(event) => {
@@ -349,7 +362,7 @@ export default function HomePage() {
                   setHomeContent(next);
                   void saveHomeContent(next);
                 }}
-                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-sm"
+                className="farm-input"
                 placeholder="Hero title"
               />
               <input
@@ -359,7 +372,7 @@ export default function HomePage() {
                   setHomeContent(next);
                   void saveHomeContent(next);
                 }}
-                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-sm"
+                className="farm-input"
                 placeholder="Hero subtitle"
               />
               <input
@@ -369,7 +382,7 @@ export default function HomePage() {
                   setHomeContent(next);
                   void saveHomeContent(next);
                 }}
-                className="rounded-md border border-[#d0c9a4] bg-white px-2 py-2 text-sm"
+                className="farm-input"
                 placeholder="About text"
               />
             </div>
@@ -381,21 +394,21 @@ export default function HomePage() {
       {showMobileMenu && (
         <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden" onClick={() => setShowMobileMenu(false)}>
           <div
-            className="absolute left-0 top-0 h-full w-72 bg-[#f8f4e3] border-r border-[#d0c9a4] shadow-2xl p-4 flex flex-col gap-4"
+            className="absolute left-0 top-0 h-full w-72 bg-[var(--farm-bg)] border-r border-[var(--farm-border)] shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--farm-border-light)]">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-[#f1e4b5] flex items-center justify-center shadow">
+                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[#f1e4b5] to-[#e8d89e] flex items-center justify-center shadow-md">
                   <span className="text-xl">🐐</span>
                 </div>
                 <div className="leading-tight">
-                  <p className="text-sm font-semibold text-[#3b4224]">Wai &amp; Aina</p>
-                  <p className="text-[11px] text-[#7a7f54]">Farm hub</p>
+                  <p className="text-sm font-bold text-[var(--farm-text-dark)]">Wai &amp; Aina</p>
+                  <p className="text-[11px] text-[var(--farm-text-muted)]">Farm hub</p>
                 </div>
               </div>
               <button
-                className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-[#4a4f2f] border border-[#d0c9a4]"
+                className="rounded-xl bg-white h-8 w-8 flex items-center justify-center text-xs font-semibold text-[var(--farm-text)] border border-[var(--farm-border)] shadow-sm hover:bg-[var(--farm-bg-warm)] transition-colors"
                 onClick={() => setShowMobileMenu(false)}
                 aria-label="Close menu"
               >
@@ -403,73 +416,53 @@ export default function HomePage() {
               </button>
             </div>
 
-            <nav className="flex flex-col gap-2 text-sm font-semibold text-[#3b4224]">
-              <Link href="#home" onClick={() => setShowMobileMenu(false)} className="rounded-lg px-3 py-2 hover:bg-white">
+            <nav className="flex flex-col gap-1 p-3 text-sm font-semibold text-[var(--farm-text-dark)] flex-1 overflow-y-auto">
+              <Link href="#home" onClick={() => setShowMobileMenu(false)} className="rounded-xl px-3 py-2.5 hover:bg-white transition-colors">
                 Home
               </Link>
-              <Link href="#about" onClick={() => setShowMobileMenu(false)} className="rounded-lg px-3 py-2 hover:bg-white">
+              <Link href="#about" onClick={() => setShowMobileMenu(false)} className="rounded-xl px-3 py-2.5 hover:bg-white transition-colors">
                 About Us
               </Link>
-              <div className="rounded-lg bg-white px-3 py-2 shadow-inner">
-                <p className="text-xs uppercase tracking-[0.18em] text-[#7a7f54] mb-2">Farm Information</p>
-                <div className="flex flex-col gap-1 font-medium">
-                  <Link
-                    href="/hub/guides/animalpedia"
-                    onClick={() => setShowMobileMenu(false)}
-                    className="rounded-md px-2 py-2 hover:bg-[#f1edd8]"
-                  >
-                    Animalpedia
+              <div className="rounded-xl bg-white px-3 py-3 shadow-sm border border-[var(--farm-border-light)]">
+                <p className="farm-label mb-2">Farm Information</p>
+                <div className="flex flex-col gap-0.5 font-medium">
+                  <Link href="/hub/guides/animalpedia" onClick={() => setShowMobileMenu(false)} className="rounded-lg px-2 py-2 hover:bg-[var(--farm-bg-highlight)] transition-colors flex items-center gap-2">
+                    <span>🐾</span> Animalpedia
                   </Link>
-                  <Link
-                    href="/hub/guides/farm-map"
-                    onClick={() => setShowMobileMenu(false)}
-                    className="rounded-md px-2 py-2 hover:bg-[#f1edd8]"
-                  >
-                    Farm Map
+                  <Link href="/hub/guides/farm-map" onClick={() => setShowMobileMenu(false)} className="rounded-lg px-2 py-2 hover:bg-[var(--farm-bg-highlight)] transition-colors flex items-center gap-2">
+                    <span>🗺️</span> Farm Map
                   </Link>
-                  <Link
-                    href="/hub/guides/how-to"
-                    onClick={() => setShowMobileMenu(false)}
-                    className="rounded-md px-2 py-2 hover:bg-[#f1edd8]"
-                  >
-                    Guides
+                  <Link href="/hub/guides/how-to" onClick={() => setShowMobileMenu(false)} className="rounded-lg px-2 py-2 hover:bg-[var(--farm-bg-highlight)] transition-colors flex items-center gap-2">
+                    <span>📘</span> Guides
                   </Link>
                 </div>
               </div>
               {canAccessWork && (
-                <Link
-                  href="/hub/dashboard"
-                  onClick={() => setShowMobileMenu(false)}
-                  className="rounded-lg px-3 py-2 hover:bg-white"
-                >
+                <Link href="/hub/dashboard" onClick={() => setShowMobileMenu(false)} className="rounded-xl px-3 py-2.5 hover:bg-white transition-colors">
                   Work Dashboard
                 </Link>
               )}
               {session && (
-                <Link
-                  href="/hub/settings"
-                  onClick={() => setShowMobileMenu(false)}
-                  className="rounded-lg px-3 py-2 hover:bg-white"
-                >
+                <Link href="/hub/settings" onClick={() => setShowMobileMenu(false)} className="rounded-xl px-3 py-2.5 hover:bg-white transition-colors">
                   Settings
                 </Link>
               )}
             </nav>
 
-            <div className="mt-auto flex items-center justify-between">
+            <div className="p-4 border-t border-[var(--farm-border-light)] flex items-center justify-between">
               {session?.name ? (
-                <div className="text-xs text-[#56652f]">
+                <div className="text-xs text-[var(--farm-accent)] font-semibold">
                   Hi, {session.name.split(" ")[0]}
                 </div>
               ) : (
-                <div className="text-xs text-[#7a7f54]">Welcome!</div>
+                <div className="text-xs text-[var(--farm-text-muted)]">Welcome!</div>
               )}
               <button
                 onClick={() => {
                   setShowMobileMenu(false);
                   setShowLogin(true);
                 }}
-                className="inline-flex items-center rounded-full border border-[#c8cba0] bg-white px-3 py-2 text-xs font-semibold hover:bg-[#f1edd8] shadow-sm"
+                className="farm-btn farm-btn-outline text-[11px]"
               >
                 {session ? "Switch user" : "Login"}
               </button>
@@ -484,48 +477,48 @@ export default function HomePage() {
           className="relative w-full overflow-hidden"
           style={{
             backgroundImage:
-              "linear-gradient(120deg, rgba(240,237,217,0.9), rgba(201,221,183,0.9)), url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80')",
+              "linear-gradient(135deg, rgba(240,237,217,0.92), rgba(201,221,183,0.92)), url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80')",
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
         >
-          <div className="pointer-events-none absolute -left-10 top-10 h-40 w-40 rounded-full bg-white/50 blur-3xl" />
-          <div className="pointer-events-none absolute right-0 bottom-0 h-56 w-56 rounded-full bg-[#b8d29b]/50 blur-3xl" />
-          <div className="max-w-7xl mx-auto px-2 sm:px-4 py-12 sm:py-16 grid md:grid-cols-2 gap-10 items-center">
-            <div className="space-y-5 bg-white/70 backdrop-blur rounded-2xl border border-white/60 shadow-lg p-6">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#5d7f3b] shadow-sm">
+          <div className="pointer-events-none absolute -left-10 top-10 h-52 w-52 rounded-full bg-white/40 blur-[80px]" />
+          <div className="pointer-events-none absolute right-0 bottom-0 h-64 w-64 rounded-full bg-[#b8d29b]/40 blur-[80px]" />
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-14 sm:py-20 grid md:grid-cols-2 gap-10 items-center">
+            <div className="space-y-6 bg-white/75 backdrop-blur-sm rounded-3xl border border-white/60 shadow-xl p-7 sm:p-8">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-[var(--farm-accent)] shadow-sm border border-white/60">
                 🐐 Since 2023
               </div>
-              <h1 className="text-3xl sm:text-4xl font-semibold text-[#2f331d] leading-tight drop-shadow-sm">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#2f331d] leading-[1.15] tracking-tight">
                 {homeContent.heroTitle}
               </h1>
-              <p className="text-[#4b5133] text-sm leading-relaxed">
+              <p className="text-[var(--farm-text)] text-sm sm:text-base leading-relaxed max-w-lg">
                 {homeContent.heroSubtitle}
               </p>
-              <div className="flex flex-wrap gap-3 pt-2">
+              <div className="flex flex-wrap gap-3 pt-1">
                 {heroButton("Explore the Farm", "#about", true)}
                 {heroButton("Open Guides", "/hub/guides/how-to")}
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-xl border border-white/70 bg-white/70 p-3 shadow-sm">
-                  <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Daily Flow</p>
-                  <p className="font-semibold text-[#3b4224]">❤️ Community-first</p>
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3.5 shadow-sm">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--farm-text-muted)] mb-0.5">Daily Flow</p>
+                  <p className="font-semibold text-[var(--farm-text-dark)]">Community-first</p>
                 </div>
-                <div className="rounded-xl border border-white/70 bg-white/70 p-3 shadow-sm">
-                  <p className="text-xs uppercase tracking-[0.16em] text-[#7a7f54]">Field Notes</p>
-                  <p className="font-semibold text-[#3b4224]">✨ Guided &amp; playful</p>
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3.5 shadow-sm">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--farm-text-muted)] mb-0.5">Field Notes</p>
+                  <p className="font-semibold text-[var(--farm-text-dark)]">Guided &amp; playful</p>
                 </div>
               </div>
             </div>
-            <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-[#d0c9a4] bg-white/85 backdrop-blur">
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/20 to-white/70" />
-              <div className="h-48 sm:h-64 bg-[url('https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center" />
-              <div className="p-6 space-y-3 relative z-10">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#7a7f54]">Farm vibes</p>
-                <p className="text-sm text-[#4b5133] leading-relaxed">
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-[var(--farm-border)] bg-white/90 backdrop-blur">
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-white/60 z-[1]" />
+              <div className="h-52 sm:h-72 bg-[url('https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center" />
+              <div className="p-6 sm:p-7 space-y-3 relative z-10">
+                <p className="farm-label">Farm vibes</p>
+                <p className="text-sm text-[var(--farm-text)] leading-relaxed">
                   Fresh milk, happy goats, and a team that cares. We craft experiences that feel wholesome and a little bit magical—perfect for volunteers, friends, and curious visitors.
                 </p>
-                <Link href="#about" className="inline-flex items-center gap-2 text-sm font-semibold text-[#3b6e2c] underline underline-offset-4">
+                <Link href="#about" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--farm-accent)] hover:text-[var(--farm-primary-hover)] underline underline-offset-4 transition-colors">
                   Meet the herd →
                 </Link>
               </div>
@@ -534,31 +527,31 @@ export default function HomePage() {
         </section>
 
       {/* About */}
-      <section id="about" className="max-w-7xl mx-auto px-2 sm:px-4 py-12 space-y-8">
-        <div className="grid md:grid-cols-2 gap-8 items-start">
-          <div className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-[#7a7f54]">Just starting out…</p>
-            <h2 className="text-3xl font-semibold text-[#3b4224]">Farm fresh produce</h2>
-            <p className="text-sm text-[#4b5133] leading-relaxed">
+      <section id="about" className="max-w-7xl mx-auto px-3 sm:px-6 py-14 sm:py-16 space-y-8">
+        <div className="grid md:grid-cols-2 gap-10 items-start">
+          <div className="space-y-5">
+            <p className="farm-label">Just starting out…</p>
+            <h2 className="text-3xl sm:text-4xl font-bold farm-heading tracking-tight">Farm fresh produce</h2>
+            <p className="text-sm sm:text-base text-[var(--farm-text)] leading-relaxed">
               {homeContent.aboutText}
             </p>
-            <p className="text-sm text-[#4b5133] leading-relaxed">
+            <p className="text-sm sm:text-base text-[var(--farm-text)] leading-relaxed">
               Future projects include developing programs for sustainable meat, eggs, and vegetable sources for both internal and external demand.
             </p>
           </div>
-          <div className="rounded-2xl border border-[#d0c9a4] bg-white shadow-md overflow-hidden">
-            <div className="h-48 bg-[url('https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center" />
-            <div className="p-6 space-y-4">
+          <div className="rounded-3xl border border-[var(--farm-border)] bg-white shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+            <div className="h-52 bg-[url('https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center" />
+            <div className="p-6 sm:p-7 space-y-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[#7a7f54]">Get involved</p>
-                <p className="text-sm text-[#4b5133] leading-relaxed">
+                <p className="farm-label mb-1">Get involved</p>
+                <p className="text-sm text-[var(--farm-text)] leading-relaxed">
                   Visit, volunteer, and learn alongside our team. We prioritize organic practices, thoughtful animal care, and collaborative stewardship of the land.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-3 text-sm font-semibold text-[#5d7f3b]">
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#eef2d9] px-3 py-1">🌿 Conservation</span>
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#eef2d9] px-3 py-1">🐄 Animal care</span>
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#eef2d9] px-3 py-1">📚 Education</span>
+              <div className="flex flex-wrap gap-2 text-sm font-semibold text-[var(--farm-accent)]">
+                <span className="inline-flex items-center gap-2 rounded-full bg-[var(--farm-bg-hover)] px-3.5 py-1.5 border border-[var(--farm-border-green)]/30">🌿 Conservation</span>
+                <span className="inline-flex items-center gap-2 rounded-full bg-[var(--farm-bg-hover)] px-3.5 py-1.5 border border-[var(--farm-border-green)]/30">🐄 Animal care</span>
+                <span className="inline-flex items-center gap-2 rounded-full bg-[var(--farm-bg-hover)] px-3.5 py-1.5 border border-[var(--farm-border-green)]/30">📚 Education</span>
               </div>
             </div>
           </div>
@@ -566,14 +559,14 @@ export default function HomePage() {
       </section>
 
       {/* Farm information */}
-      <section className="bg-[#f1edd8] py-12">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 space-y-6">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-[0.2em] text-[#7a7f54]">Farm information</p>
-            <h3 className="text-2xl font-semibold text-[#3b4224]">Know your way around Wai &amp; Aina</h3>
-            <p className="text-sm text-[#4b5133]">Maps, animal notes, and how-to guides to support every visitor.</p>
+      <section className="bg-[var(--farm-bg-warm)] py-14 sm:py-16">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 space-y-8">
+          <div className="flex flex-col gap-2 max-w-xl">
+            <p className="farm-label">Farm information</p>
+            <h3 className="text-2xl sm:text-3xl font-bold farm-heading tracking-tight">Know your way around Wai &amp; Aina</h3>
+            <p className="text-sm sm:text-base text-[var(--farm-text)]">Maps, animal notes, and how-to guides to support every visitor.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-3 gap-5">
             {[
               {
                 title: "Animalpedia",
@@ -597,15 +590,17 @@ export default function HomePage() {
               <Link
                 key={item.title}
                 href={item.href}
-                className="group rounded-2xl border border-[#d0c9a4] bg-white p-5 shadow-sm hover:-translate-y-0.5 transition"
+                className="group rounded-2xl border border-[var(--farm-border)] bg-white p-6 shadow-sm hover:-translate-y-1 hover:shadow-lg transition-all duration-200"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{item.icon}</span>
-                  <h4 className="text-lg font-semibold text-[#3b4224]">{item.title}</h4>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-[var(--farm-bg-highlight)] flex items-center justify-center text-xl shadow-sm">
+                    {item.icon}
+                  </div>
+                  <h4 className="text-lg font-bold farm-heading">{item.title}</h4>
                 </div>
-                <p className="mt-3 text-sm text-[#4b5133] leading-relaxed">{item.description}</p>
-                <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#5d7f3b] underline underline-offset-4">
-                  Open {item.title} →
+                <p className="text-sm text-[var(--farm-text)] leading-relaxed">{item.description}</p>
+                <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--farm-accent)] group-hover:gap-2 transition-all">
+                  Open {item.title} <span className="transition-transform group-hover:translate-x-0.5">→</span>
                 </span>
               </Link>
             ))}
@@ -614,42 +609,44 @@ export default function HomePage() {
       </section>
 
       {/* Contact footer */}
-      <footer className="bg-[#f1edd8] border-t border-[#d0c9a4] py-10">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 flex flex-col md:flex-row md:items-center md:justify-between gap-6 text-sm text-[#4b5133]">
-          <div className="space-y-1">
-            <p>543 Kualono Pl</p>
+      <footer className="bg-[var(--farm-bg-warm)] border-t border-[var(--farm-border)] py-12">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 flex flex-col md:flex-row md:items-center md:justify-between gap-8 text-sm text-[var(--farm-text)]">
+          <div className="space-y-1.5">
+            <p className="font-medium">543 Kualono Pl</p>
             <p>Kapaa, HI 96746</p>
             <p>(808) 555-8884</p>
             <p>waiandaina@gmail.com</p>
           </div>
           <div className="flex flex-col items-start md:items-end gap-2">
-            <span className="text-xs uppercase tracking-[0.18em] text-[#7a7f54]">Since 2023</span>
-            <p className="text-lg font-semibold text-[#3b4224]">Wai &amp; Aina</p>
-            <p className="text-xs text-[#7a7f54]">Sustainable living · Ag education · Conservation</p>
+            <span className="farm-label">Since 2023</span>
+            <p className="text-xl font-bold farm-heading">Wai &amp; Aina</p>
+            <p className="text-xs text-[var(--farm-text-muted)]">Sustainable living · Ag education · Conservation</p>
           </div>
         </div>
       </footer>
 
       {/* Login modal */}
       {showLogin && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-[#f7f4e6] border border-[#d0c9a4] shadow-2xl overflow-hidden">
-            <div className="bg-[#a0b764] text-white px-5 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🔐</span>
-                <span className="text-sm font-semibold uppercase tracking-[0.18em]">Login</span>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white border border-[var(--farm-border)] shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-[var(--farm-primary)] to-[#8fae4c] text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="text-lg">🔐</span>
+                </div>
+                <span className="text-sm font-bold uppercase tracking-[0.18em]">Sign in</span>
               </div>
               <button
                 onClick={() => setShowLogin(false)}
-                className="rounded-full bg-white/20 px-2 py-1 text-xs hover:bg-white/30"
+                className="rounded-full bg-white/20 h-7 w-7 flex items-center justify-center text-xs hover:bg-white/30 transition-colors"
                 aria-label="Close login"
               >
                 ✕
               </button>
             </div>
-            <form onSubmit={handleLogin} className="p-6 space-y-4 text-[#3b4224]">
-              <div className="space-y-1">
-                <label htmlFor="name" className="text-sm font-semibold text-[#4f5730]">
+            <form onSubmit={handleLogin} className="p-6 space-y-5 text-[var(--farm-text-dark)]">
+              <div className="space-y-1.5">
+                <label htmlFor="name" className="text-sm font-semibold text-[var(--farm-text-label)]">
                   Select your name
                 </label>
                 <select
@@ -657,7 +654,7 @@ export default function HomePage() {
                   value={selectedName}
                   onChange={(e) => handleNameChange(e.target.value)}
                   disabled={usersLoading || !!usersError || users.length === 0}
-                  className="w-full rounded-md border border-[#c8cba0] bg-white px-4 py-3 text-sm font-medium text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="farm-input"
                 >
                   {usersLoading && <option value="">Loading users...</option>}
                   {!usersLoading && usersError && <option value="">Error loading users</option>}
@@ -677,21 +674,21 @@ export default function HomePage() {
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label htmlFor="number" className="text-sm font-semibold text-[#4f5730]">
+              <div className="space-y-1.5">
+                <label htmlFor="number" className="text-sm font-semibold text-[var(--farm-text-label)]">
                   Or enter your number
                 </label>
                 <input
                   id="number"
                   value={number}
                   onChange={(e) => handleNumberChange(e.target.value)}
-                  className="w-full rounded-md border border-[#c8cba0] bg-white px-4 py-3 text-sm font-medium text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c]"
+                  className="farm-input"
                   placeholder="Phone or member number"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label htmlFor="password" className="text-sm font-semibold text-[#4f5730]">
+              <div className="space-y-1.5">
+                <label htmlFor="password" className="text-sm font-semibold text-[var(--farm-text-label)]">
                   Passcode
                 </label>
                 <input
@@ -699,30 +696,30 @@ export default function HomePage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-md border border-[#c8cba0] bg-[#f1edd8] px-3 py-2 text-sm text-[#3b4224] shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8fae4c] focus:border-[#8fae4c]"
+                  className="farm-input bg-[var(--farm-bg-warm)]"
                   placeholder="Enter your passcode"
                 />
-                <p className="text-[11px] text-[#7a7f54]">Your passcode is set by a site admin.</p>
+                <p className="text-[11px] text-[var(--farm-text-muted)]">Your passcode is set by a site admin.</p>
               </div>
 
               {loginError && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{loginError}</div>
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700 font-medium">{loginError}</div>
               )}
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pt-1">
                 <button
                   type="button"
                   onClick={() => setShowLogin(false)}
-                  className="rounded-full border border-[#c8cba0] bg-white px-4 py-2 text-sm font-semibold text-[#3b4224] hover:bg-[#f1edd8]"
+                  className="farm-btn farm-btn-outline"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="inline-flex items-center gap-2 rounded-full bg-[#a0b764] text-white px-5 py-2.5 text-sm font-semibold shadow hover:bg-[#8ba450] disabled:opacity-60"
+                  className="farm-btn farm-btn-primary rounded-full px-6"
                 >
-                  {isSubmitting ? "Signing in..." : "Login"}
+                  {isSubmitting ? "Signing in…" : "Login"}
                 </button>
               </div>
             </form>

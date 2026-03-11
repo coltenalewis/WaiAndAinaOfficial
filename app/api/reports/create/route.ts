@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, supabaseRequest } from "@/lib/supabase";
+import { toIsoDate } from "@/lib/utils";
 
 type ScheduleResponse = {
   people: string[];
@@ -32,15 +33,6 @@ type TaskDetail = {
   personCount?: number | null;
   timeSlots?: string[] | null;
 };
-
-function toIsoDate(label?: string | null) {
-  if (!label) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return label;
-  if (!label.includes("/")) return null;
-  const [month, day, year] = label.split("/");
-  if (!month || !day || !year) return null;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
 
 function normalizeCellTasks(cell: any): { id?: string; name: string }[] {
   if (!cell) return [];
