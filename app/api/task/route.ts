@@ -126,17 +126,6 @@ function toIsoDate(label?: string | null) {
   return null;
 }
 
-function getHawaiiDateLabel() {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Pacific/Honolulu",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(new Date());
-  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${map.year}-${map.month}-${map.day}`;
-}
 
 function parseCommentAuthor(text: string) {
   const marker = " : ";
@@ -186,17 +175,6 @@ async function fetchAssignedPeople(taskId: string) {
     .map((row) => row?.person?.name)
     .filter(Boolean) as string[];
   return Array.from(new Set(names));
-}
-
-async function fetchTaskSummary(taskId: string) {
-  const tasks = await supabaseRequest<any[]>("tasks", {
-    query: {
-      select: "id,name,status,occurrence_date",
-      id: `eq.${taskId}`,
-      limit: 1,
-    },
-  });
-  return tasks?.[0] ?? null;
 }
 
 async function resolveCommentAuthors(comments: NormalizedComment[]) {
