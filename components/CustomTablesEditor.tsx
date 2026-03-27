@@ -248,32 +248,21 @@ function listDatesInRange(start: string, end: string) {
 }
 
 
-const DEFAULT_KEYBINDS = {
-  copy: "Ctrl/Cmd+C",
-  paste: "Ctrl/Cmd+V",
-};
 
-function normalizeKeybind(value: string, fallback: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return fallback;
-  const compact = trimmed.replace(/\s+/g, "");
-  return compact.toUpperCase();
+function isStandardCopyPaste(event: KeyboardEvent, action: "copy" | "paste") {
+  if (event.altKey) return false;
+  if (!event.ctrlKey && !event.metaKey) return false;
+  const expectedKey = action === "copy" ? "c" : "v";
+  return event.key.toLowerCase() === expectedKey;
 }
 
-function matchesKeybind(event: KeyboardEvent, keybind: string) {
-  const normalized = keybind.toUpperCase();
-  const usesCtrl = normalized.includes("CTRL");
-  const usesCmd = normalized.includes("CMD") || normalized.includes("META");
-  const usesShift = normalized.includes("SHIFT");
-  const usesAlt = normalized.includes("ALT") || normalized.includes("OPTION");
-  const matchKey = normalized.split("+").pop()?.toLowerCase() || "";
-  const key = event.key.toLowerCase();
-  const hasPrimary = usesCtrl || usesCmd;
-  const primaryPressed = usesCtrl ? event.ctrlKey : usesCmd ? event.metaKey : (event.ctrlKey || event.metaKey);
-  if (hasPrimary && !primaryPressed) return false;
-  if (usesShift !== event.shiftKey) return false;
-  if (usesAlt !== event.altKey) return false;
-  return Boolean(matchKey) && key === matchKey;
+function getSelectionBounds(selection: CellSelection) {
+  return {
+    minRow: Math.min(selection.startRowIdx, selection.endRowIdx),
+    maxRow: Math.max(selection.startRowIdx, selection.endRowIdx),
+    minCol: Math.min(selection.startColIdx, selection.endColIdx),
+    maxCol: Math.max(selection.startColIdx, selection.endColIdx),
+  };
 }
 
 function isStandardCopyPaste(event: KeyboardEvent, action: "copy" | "paste") {
@@ -317,9 +306,6 @@ export function CustomTablesEditor({
   const [pastTablesLoaded, setPastTablesLoaded] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{ tableId: string; rowIdx: number; colIdx: number } | null>(null);
   const [selectedRange, setSelectedRange] = useState<CellSelection | null>(null);
-  const keybindCacheKey = useMemo(() => `custom-table-keybinds-${(currentUserName || "guest").toLowerCase()}`, [currentUserName]);
-  const [copyKeybind, setCopyKeybind] = useState(DEFAULT_KEYBINDS.copy);
-  const [pasteKeybind, setPasteKeybind] = useState(DEFAULT_KEYBINDS.paste);
   const [moreActionsOpen, setMoreActionsOpen] = useState(false);
   const [rangeStartDate, setRangeStartDate] = useState("");
   const [rangeEndDate, setRangeEndDate] = useState("");
@@ -684,23 +670,6 @@ export function CustomTablesEditor({
 
 
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const cached = window.localStorage.getItem(keybindCacheKey);
-      if (!cached) return;
-      const parsed = JSON.parse(cached) as { copy?: string; paste?: string };
-      setCopyKeybind(normalizeKeybind(parsed.copy || DEFAULT_KEYBINDS.copy, DEFAULT_KEYBINDS.copy));
-      setPasteKeybind(normalizeKeybind(parsed.paste || DEFAULT_KEYBINDS.paste, DEFAULT_KEYBINDS.paste));
-    } catch (err) {
-      console.warn("Failed to load custom table keybinds", err);
-    }
-  }, [keybindCacheKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(keybindCacheKey, JSON.stringify({ copy: copyKeybind, paste: pasteKeybind }));
-  }, [copyKeybind, keybindCacheKey, pasteKeybind]);
 
   const addCustomDateSelection = useCallback(() => {
     const iso = toIsoDateLabel(customDateInput) || customDateInput;
@@ -778,7 +747,7 @@ export function CustomTablesEditor({
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) {
         return;
       }
-      const copyPressed = isStandardCopyPaste(event, "copy") || matchesKeybind(event, copyKeybind);
+      const copyPressed = isStandardCopyPaste(event, "copy");
       if (copyPressed) {
         const activeRange = selectedRange;
         const tableId = activeRange?.tableId || selectedCell.tableId;
@@ -801,7 +770,7 @@ export function CustomTablesEditor({
         event.preventDefault();
         return;
       }
-      const pastePressed = isStandardCopyPaste(event, "paste") || matchesKeybind(event, pasteKeybind);
+      const pastePressed = isStandardCopyPaste(event, "paste");
       if (pastePressed) {
         void navigator.clipboard?.readText().then((value) => setSelectedRangeValues(value || ""));
         event.preventDefault();
@@ -810,7 +779,7 @@ export function CustomTablesEditor({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [copyKeybind, customTables, pasteKeybind, selectedCell, selectedRange, setSelectedRangeValues]);
+  }, [customTables, selectedCell, selectedRange, setSelectedRangeValues]);
 
   useEffect(() => {
     const handleCopy = (event: ClipboardEvent) => {
@@ -923,23 +892,6 @@ export function CustomTablesEditor({
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {moreActionsOpen && (
-        <div className="mt-3 rounded-lg border border-dashed border-[#d0c9a4] bg-white/85 p-3 text-xs text-[#4b5133]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7a7f54]">Custom keybinds</p>
-          <p className="mt-1 text-[11px] text-[#6b6f4c]">Set table cell copy/paste shortcuts. Saved in your browser cache.</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <label className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-[0.12em]">Copy</span>
-              <input value={copyKeybind} onChange={(event) => setCopyKeybind(normalizeKeybind(event.target.value, DEFAULT_KEYBINDS.copy))} className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-[11px]" placeholder="Ctrl/Cmd+C" />
-            </label>
-            <label className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-[0.12em]">Paste</span>
-              <input value={pasteKeybind} onChange={(event) => setPasteKeybind(normalizeKeybind(event.target.value, DEFAULT_KEYBINDS.paste))} className="rounded-md border border-[#d0c9a4] bg-white px-2 py-1 text-[11px]" placeholder="Ctrl/Cmd+V" />
-            </label>
-          </div>
         </div>
       )}
 

@@ -5,6 +5,8 @@ import { getOrCreateDeviceId } from "@/lib/pushClient";
 
 const HOMESCREEN_DISMISS_KEY = "waianda_homescreen_dismissed";
 const NOTIFICATION_DISMISS_KEY = "waianda_notification_dismissed";
+const NOTIFICATION_LAST_PROMPT_KEY = "waianda_notification_last_prompt";
+const NOTIFICATION_REPROMPT_MS = 1000 * 60 * 60 * 24 * 3;
 
 type PushNotificationManagerProps = {
   userName: string;
@@ -84,10 +86,24 @@ export function PushNotificationManager({
     if (typeof window === "undefined") return;
     if (!installed) return;
     if (!supportsPush()) return;
-    const dismissed = localStorage.getItem(NOTIFICATION_DISMISS_KEY);
+
     const permission = Notification.permission;
     setPermissionState(permission);
-    if (permission === "default" && !dismissed) {
+    const dismissed = localStorage.getItem(NOTIFICATION_DISMISS_KEY);
+    const lastPromptAt = Number(localStorage.getItem(NOTIFICATION_LAST_PROMPT_KEY) || "0");
+    const dueForReprompt = !lastPromptAt || Date.now() - lastPromptAt > NOTIFICATION_REPROMPT_MS;
+
+    if (permission === "granted") {
+      setShowNotificationPrompt(false);
+      return;
+    }
+
+    if (permission === "denied") {
+      setShowNotificationPrompt(true);
+      return;
+    }
+
+    if (!dismissed || dueForReprompt) {
       setShowNotificationPrompt(true);
     }
   }, [installed]);
@@ -127,6 +143,46 @@ export function PushNotificationManager({
     loadConfig();
   }, []);
 
+  const ensureSubscriptionSynced = useCallback(async () => {
+    if (!supportsPush()) return false;
+    if (!vapidKey) {
+      setStatusMessage("Push notifications are not configured yet. Contact an admin to set VAPID keys.");
+      return false;
+    }
+    if (!userName) {
+      setStatusMessage("Log in to enable notifications.");
+      return false;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: decodeBase64Url(vapidKey),
+      });
+    }
+
+    const deviceId = getOrCreateDeviceId();
+    const res = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userName,
+        userRole,
+        deviceId,
+        subscription: subscription.toJSON(),
+      }),
+    });
+
+    if (!res.ok) {
+      const json = await res.json().catch(() => null);
+      throw new Error(json?.error || `Unable to save push subscription (HTTP ${res.status})`);
+    }
+
+    return true;
+  }, [userName, userRole, vapidKey]);
+
   const subscribeForPush = useCallback(async () => {
     if (!supportsPush()) {
       setStatusMessage("Push notifications are not supported on this device.");
@@ -158,60 +214,41 @@ export function PushNotificationManager({
         );
         return;
       }
-      const registration = await navigator.serviceWorker.ready;
-      const existing = await registration.pushManager.getSubscription();
-      const subscription =
-        existing ||
-        (await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: decodeBase64Url(vapidKey),
-        }));
-      const deviceId = getOrCreateDeviceId();
-      await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userName,
-          userRole,
-          deviceId,
-          subscription: subscription.toJSON(),
-        }),
-      });
+      const saved = await ensureSubscriptionSynced();
+      if (!saved) return;
       setStatusMessage("Notifications are enabled.");
       setShowNotificationPrompt(false);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(NOTIFICATION_DISMISS_KEY);
+        localStorage.setItem(NOTIFICATION_LAST_PROMPT_KEY, String(Date.now()));
+      }
     } catch (err) {
       console.error("Failed to enable push notifications", err);
       setStatusMessage("Unable to enable notifications. Please try again.");
     }
-  }, [installed, userName, userRole, vapidKey]);
+  }, [ensureSubscriptionSynced, installed, userName, userRole, vapidKey]);
 
   useEffect(() => {
     if (!supportsPush()) return;
     if (!userName) return;
     if (!installed) return;
     if (Notification.permission !== "granted") return;
+
     const syncSubscription = async () => {
       try {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
-        if (!subscription) return;
-        const deviceId = getOrCreateDeviceId();
-        await fetch("/api/push/subscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userName,
-            userRole,
-            deviceId,
-            subscription: subscription.toJSON(),
-          }),
-        });
+        const synced = await ensureSubscriptionSynced();
+        if (synced) {
+          setPermissionState("granted");
+          setStatusMessage(null);
+        }
       } catch (err) {
         console.error("Failed to sync push subscription", err);
+        setStatusMessage("Notifications need to be re-enabled. Please tap Enable notifications again.");
+        setShowNotificationPrompt(true);
       }
     };
     syncSubscription();
-  }, [installed, userName, userRole]);
+  }, [ensureSubscriptionSynced, installed, userName]);
 
   const dismissHomescreenGuide = () => {
     if (typeof window !== "undefined") {
@@ -223,6 +260,7 @@ export function PushNotificationManager({
   const dismissNotificationPrompt = () => {
     if (typeof window !== "undefined") {
       localStorage.setItem(NOTIFICATION_DISMISS_KEY, "1");
+      localStorage.setItem(NOTIFICATION_LAST_PROMPT_KEY, String(Date.now()));
     }
     setShowNotificationPrompt(false);
   };
@@ -282,8 +320,13 @@ export function PushNotificationManager({
           </p>
           <p className="mt-1 text-xs text-[#5b5f3f]">
             You opened the Home Screen app. Turn on notifications so we can alert you
-            about schedule updates.
+            about schedule updates. If they stop later, tap Enable again to re-save your subscription.
           </p>
+          {permissionState === "denied" && (
+            <p className="mt-2 text-xs text-amber-700">
+              Notifications are blocked in browser settings. Re-enable notifications in your device/browser settings, then tap Enable again.
+            </p>
+          )}
           {statusMessage && (
             <p className="mt-2 text-xs text-[#6b7050]">{statusMessage}</p>
           )}
