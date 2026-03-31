@@ -2652,6 +2652,15 @@ export default function HubSchedulePage() {
             {viewMode === "tasks" ? (
               <div className="space-y-4">
                 <div className="rounded-lg border border-[#d0c9a4] bg-white/80 p-4 shadow-sm">
+                  <div className="mb-3 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => loadSchedule({ showLoading: true, force: true })}
+                      className="rounded-full border border-[#d0c9a4] bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#4a5b2a] shadow-sm transition hover:bg-white"
+                    >
+                      Refresh tasks
+                    </button>
+                  </div>
                   {loading && (
                     <p className="text-sm text-[#7a7f54]">Loading your tasks…</p>
                   )}

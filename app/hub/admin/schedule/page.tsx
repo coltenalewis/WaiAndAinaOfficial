@@ -239,31 +239,6 @@ function countCommentsForDate(comments: unknown, targetIso: string) {
 }
 
 
-function normalizeCustomKeybind(value: string, fallback: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return fallback;
-  return trimmed.replace(/\s+/g, "").toUpperCase();
-}
-
-function matchesCustomKeybind(event: KeyboardEvent, keybind: string) {
-  const normalized = keybind.toUpperCase();
-  const usesCtrl = normalized.includes("CTRL");
-  const usesCmd = normalized.includes("CMD") || normalized.includes("META");
-  const usesShift = normalized.includes("SHIFT");
-  const usesAlt = normalized.includes("ALT") || normalized.includes("OPTION");
-  const matchKey = normalized.split("+").pop()?.toLowerCase() || "";
-  const hasPrimary = usesCtrl || usesCmd;
-  const primaryPressed = usesCtrl
-    ? event.ctrlKey
-    : usesCmd
-      ? event.metaKey
-      : event.ctrlKey || event.metaKey;
-  if (hasPrimary && !primaryPressed) return false;
-  if (usesShift !== event.shiftKey) return false;
-  if (usesAlt !== event.altKey) return false;
-  return Boolean(matchKey) && event.key.toLowerCase() === matchKey;
-}
-
 function parseEstimatedHours(value?: string | null) {
   if (!value) return DEFAULT_SHIFT_HOURS;
   const match = String(value).match(/[\d.]+/);
@@ -465,8 +440,6 @@ export default function AdminScheduleEditorPage() {
   const [dayOverviewCommentsByTask, setDayOverviewCommentsByTask] = useState<Record<string, TaskCommentPreview[]>>({});
   const [dayOverviewCommentsLoading, setDayOverviewCommentsLoading] = useState<Set<string>>(new Set());
   const [yesterdayOverviewVisible, setYesterdayOverviewVisible] = useState(true);
-  const [canvasCopyKeybind, setCanvasCopyKeybind] = useState("Ctrl/Cmd+C");
-  const [canvasPasteKeybind, setCanvasPasteKeybind] = useState("Ctrl/Cmd+V");
   const taskEditLastSavedSignatureRef = useRef<string>("");
   const taskEditAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingTaskKey, setEditingTaskKey] = useState<string | null>(null);
@@ -821,24 +794,6 @@ export default function AdminScheduleEditorPage() {
     if (cached === "true") setYesterdayOverviewVisible(true);
     if (cached === "false") setYesterdayOverviewVisible(false);
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const key = `custom-table-keybinds-${(currentUserName || "guest").toLowerCase()}`;
-      const cached = localStorage.getItem(key);
-      if (!cached) return;
-      const parsed = JSON.parse(cached) as { copy?: string; paste?: string };
-      setCanvasCopyKeybind(
-        normalizeCustomKeybind(parsed.copy || "Ctrl/Cmd+C", "Ctrl/Cmd+C")
-      );
-      setCanvasPasteKeybind(
-        normalizeCustomKeybind(parsed.paste || "Ctrl/Cmd+V", "Ctrl/Cmd+V")
-      );
-    } catch (err) {
-      console.warn("Failed to parse shared keybind cache", err);
-    }
-  }, [currentUserName]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2197,9 +2152,9 @@ export default function AdminScheduleEditorPage() {
     const changes: UndoChange[] = [];
     const nextCells = scheduleData.cells.map((row, rowIdx) =>
       row.map((cell, colIdx) => {
-        const hasContent = cell.tasks.length > 0 || Boolean(cell.note);
+        const hasContent = cell.tasks.length > 0 || Boolean(cell.note) || Boolean(cell.blocked);
         if (!hasContent) return cell;
-        const nextContent: CellContent = { ...cell, tasks: [], note: "" };
+        const nextContent: CellContent = { ...cell, tasks: [], note: "", blocked: false };
         changes.push({
           person: scheduleData.people[rowIdx],
           slotId: scheduleData.slots[colIdx].id,
@@ -3194,16 +3149,6 @@ export default function AdminScheduleEditorPage() {
           return;
         }
       }
-      if (selectedCell && matchesCustomKeybind(event, canvasCopyKeybind)) {
-        handleCopyCell();
-        event.preventDefault();
-        return;
-      }
-      if (selectedCell && matchesCustomKeybind(event, canvasPasteKeybind)) {
-        handlePasteCell();
-        event.preventDefault();
-        return;
-      }
       const isMac =
         typeof navigator !== "undefined" &&
         /Mac|iPod|iPhone|iPad/.test(navigator.platform);
@@ -3237,8 +3182,6 @@ export default function AdminScheduleEditorPage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    canvasCopyKeybind,
-    canvasPasteKeybind,
     cellClipboard,
     handleCopyCell,
     handlePasteCell,
@@ -4429,6 +4372,43 @@ export default function AdminScheduleEditorPage() {
           targetRecurringBySeries.set(seriesId, task.id);
         }
       });
+      const sourceSeriesMeta = new Map<string, { recurrenceUntil: string }>();
+      sourceRecurringTasks.forEach((task: any) => {
+        const seriesId = String(task.parent_task_id || task.id);
+        const recurrenceUntil = String(task.recurrence_until || "");
+        if (!sourceSeriesMeta.has(seriesId)) {
+          sourceSeriesMeta.set(seriesId, { recurrenceUntil });
+        }
+      });
+      for (const [seriesId, meta] of sourceSeriesMeta.entries()) {
+        if (targetRecurringBySeries.has(seriesId)) continue;
+        if (meta.recurrenceUntil && meta.recurrenceUntil < targetIso) {
+          const extendRes = await fetch("/api/tasks", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: seriesId,
+              recurrence_until: targetIso,
+              applyTo: "all",
+            }),
+          });
+          if (!extendRes.ok) {
+            const json = await extendRes.json().catch(() => ({}));
+            throw new Error(json.error || "Failed to extend recurring task until date.");
+          }
+        }
+
+        const occurrenceRes = await fetch("/api/tasks/occurrence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seriesId, occurrenceDate: targetIso }),
+        });
+        const occurrenceJson = await occurrenceRes.json().catch(() => ({}));
+        if (!occurrenceRes.ok || !occurrenceJson.task?.id) {
+          throw new Error(occurrenceJson.error || "Failed to ensure recurring task occurrence.");
+        }
+        targetRecurringBySeries.set(seriesId, String(occurrenceJson.task.id));
+      }
       const sourceOneOffById = new Map<string, any>();
       if (suggestModeEnabled) {
         const sourceOneOffRes = await fetch(
@@ -5784,7 +5764,7 @@ export default function AdminScheduleEditorPage() {
               <li>Shift + click to select a range of cells.</li>
               <li>Double-click a task to rename it inline.</li>
               <li>Press Esc to cancel inline editing.</li>
-              <li>Copy/Paste keybinds mirror Custom Tables settings (site-wide for canvas + custom tables).</li>
+              <li>Copy/Paste uses standard shortcuts across the site: Ctrl+C / Ctrl+V (Windows) and Cmd+C / Cmd+V (Mac).</li>
             </ul>
           </details>
 
@@ -6224,12 +6204,6 @@ export default function AdminScheduleEditorPage() {
 
                             {/* Assignment counter and completion indicator */}
                             <div className="flex shrink-0 items-center gap-1">
-                              {scheduleMode === "page" && hasUnpublishedChanges && (
-                                <span
-                                  className="h-2 w-2 rounded-full bg-red-500"
-                                  aria-label="Unpublished changes"
-                                />
-                              )}
                               <span className="rounded-full bg-white/80 px-1.5 py-[1px] text-[9px] font-semibold text-[#2f3b21]">
                                 {assignedCount}/{neededCount}
                               </span>
